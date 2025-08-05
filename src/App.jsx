@@ -13,11 +13,10 @@ function App() {
 
     try {
       const response = await axios.post(
-        "https://bible-ai-wmlk.onrender.com/bible",
+        "https://bible-ai-wmlk.onrender.com/bible", // Your backend endpoint
         null,
         { params: { query } }
       );
-
       setAnswer(response.data.answer || "No answer received.");
     } catch (error) {
       console.error(error);
@@ -28,34 +27,49 @@ function App() {
   };
 
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", textAlign: "center", marginTop: "50px" }}>
+    <div
+      style={{
+        fontFamily: "Arial, sans-serif",
+        textAlign: "center",
+        marginTop: "50px",
+        backgroundColor: "#1a1a1a",
+        minHeight: "100vh",
+        color: "white",
+        padding: "20px",
+      }}
+    >
       <h1>📖 Bible AI</h1>
       <p>Ask any Bible-related question below:</p>
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Type your question..."
-        style={{
-          width: "60%",
-          padding: "10px",
-          fontSize: "16px",
-          marginRight: "10px",
-        }}
-      />
-      <button
-        onClick={handleAsk}
-        style={{
-          padding: "10px 20px",
-          fontSize: "16px",
-          cursor: "pointer",
-          backgroundColor: "#4CAF50",
-          color: "white",
-          border: "none",
-        }}
-      >
-        Ask
-      </button>
+
+      <div style={{ display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap" }}>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Type your question..."
+          style={{
+            flex: "1",
+            minWidth: "250px",
+            maxWidth: "500px",
+            padding: "10px",
+            fontSize: "16px",
+          }}
+        />
+        <button
+          onClick={handleAsk}
+          style={{
+            padding: "10px 20px",
+            fontSize: "16px",
+            cursor: "pointer",
+            backgroundColor: "#4CAF50",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+          }}
+        >
+          Ask
+        </button>
+      </div>
 
       {loading && <p style={{ marginTop: "20px" }}>⏳ Fetching answer...</p>}
 
@@ -66,14 +80,17 @@ function App() {
             padding: "20px",
             border: "1px solid #ccc",
             borderRadius: "8px",
-            width: "60%",
+            width: "90%",
+            maxWidth: "700px",
             marginLeft: "auto",
             marginRight: "auto",
             background: "#f9f9f9",
+            color: "#000", // ✅ Make text black for visibility
             textAlign: "left",
+            lineHeight: "1.5",
           }}
         >
-          <h3>Answer:</h3>
+          <h3 style={{ color: "#333" }}>Answer:</h3>
           <p>{answer}</p>
         </div>
       )}
@@ -82,6 +99,7 @@ function App() {
 }
 
 export default App;
+
 
 
 
