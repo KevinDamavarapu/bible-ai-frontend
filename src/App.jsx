@@ -1,65 +1,88 @@
 import { useState } from "react";
 import axios from "axios";
 
-export default function App() {
+function App() {
   const [query, setQuery] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   const handleAsk = async () => {
     if (!query.trim()) return;
     setLoading(true);
-    setError("");
     setAnswer("");
 
     try {
       const response = await axios.post(
         "https://bible-ai-wmlk.onrender.com/bible",
-        { query },
-        {
-          headers: { "Content-Type": "application/json" },
-        }
+        null,
+        { params: { query } }
       );
+
       setAnswer(response.data.answer || "No answer received.");
-    } catch (err) {
-      setError("Failed to fetch answer. Please try again.");
+    } catch (error) {
+      console.error(error);
+      setAnswer("Error: Could not fetch the answer. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ padding: "30px", maxWidth: "600px", margin: "0 auto", fontFamily: "Arial" }}>
-      <h1>Bible AI</h1>
+    <div style={{ fontFamily: "Arial, sans-serif", textAlign: "center", marginTop: "50px" }}>
+      <h1>📖 Bible AI</h1>
+      <p>Ask any Bible-related question below:</p>
       <input
         type="text"
-        placeholder="Ask something about the Bible..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        style={{ width: "100%", padding: "10px", fontSize: "16px" }}
+        placeholder="Type your question..."
+        style={{
+          width: "60%",
+          padding: "10px",
+          fontSize: "16px",
+          marginRight: "10px",
+        }}
       />
       <button
         onClick={handleAsk}
         style={{
-          marginTop: "10px",
           padding: "10px 20px",
           fontSize: "16px",
           cursor: "pointer",
+          backgroundColor: "#4CAF50",
+          color: "white",
+          border: "none",
         }}
       >
-        {loading ? "Asking..." : "Ask"}
+        Ask
       </button>
 
-      {error && <p style={{ color: "red", marginTop: "15px" }}>{error}</p>}
+      {loading && <p style={{ marginTop: "20px" }}>⏳ Fetching answer...</p>}
+
       {answer && (
-        <div style={{ marginTop: "20px", padding: "15px", background: "#f9f9f9", borderRadius: "5px" }}>
-          <strong>Answer:</strong>
+        <div
+          style={{
+            marginTop: "30px",
+            padding: "20px",
+            border: "1px solid #ccc",
+            borderRadius: "8px",
+            width: "60%",
+            marginLeft: "auto",
+            marginRight: "auto",
+            background: "#f9f9f9",
+            textAlign: "left",
+          }}
+        >
+          <h3>Answer:</h3>
           <p>{answer}</p>
         </div>
       )}
     </div>
   );
 }
+
+export default App;
+
+
 
 
