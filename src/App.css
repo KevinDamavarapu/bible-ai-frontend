@@ -1,173 +1,118 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
-
-* {
-  box-sizing: border-box;
-}
-
 body {
   margin: 0;
-  font-family: 'Poppins', sans-serif;
-  background: linear-gradient(-45deg, #3f51b5, #5c6bc0, #3949ab, #1e3c72);
-  background-size: 400% 400%;
-  animation: gradientBG 15s ease infinite;
-  color: #fff;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(135deg, #2c3e50, #4ca1af);
+  color: white;
   min-height: 100vh;
 }
 
-@keyframes gradientBG {
-  0% {background-position: 0% 50%;}
-  50% {background-position: 100% 50%;}
-  100% {background-position: 0% 50%;}
-}
-
-.background-watermark {
-  position: fixed;
-  inset: 0;
-  background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Cross_simple.svg/800px-Cross_simple.svg.png') 
-              center/20% no-repeat;
-  opacity: 0.04;
-  z-index: 0;
-}
-
 .app-container {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: 20px;
-  position: relative;
-  z-index: 1;
-}
-
-.app-header {
-  position: sticky;
-  top: 0;
-  background: rgba(30, 60, 114, 0.8);
-  backdrop-filter: blur(6px);
-  padding: 10px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
   text-align: center;
-  border-radius: 0 0 12px 12px;
 }
 
-.app-header h1 {
-  margin: 0;
-  font-size: 2rem;
+.title {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .subtitle {
-  margin: 0;
-  font-size: 0.9rem;
-  color: #ddd;
+  font-size: 1.2rem;
+  margin-bottom: 1.5rem;
+  opacity: 0.9;
 }
 
-.backend-status {
-  font-size: 0.85rem;
-  color: #ffeb3b;
-  margin-top: 4px;
-}
-
-.query-form {
+.input-section {
   display: flex;
-  margin: 20px 0;
-  gap: 10px;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  width: 100%;
+  max-width: 600px;
 }
 
-.query-form input {
+.query-input {
   flex: 1;
-  padding: 12px;
-  border-radius: 25px;
+  padding: 0.75rem;
+  border-radius: 8px;
   border: none;
   outline: none;
   font-size: 1rem;
 }
 
-.query-form button {
-  padding: 12px 20px;
-  border-radius: 25px;
+.ask-button {
+  padding: 0.75rem 1.2rem;
+  background-color: #f39c12;
+  color: white;
   border: none;
+  border-radius: 8px;
   cursor: pointer;
-  font-weight: 600;
-  background: #ffeb3b;
-  color: #333;
-  transition: 0.3s;
+  font-weight: bold;
+  transition: 0.2s;
 }
 
-.query-form button:hover {
-  background: #ffc107;
+.ask-button:hover {
+  background-color: #e67e22;
 }
 
-.suggested-questions {
+.suggestions {
+  margin-top: 1rem;
+}
+
+.suggestion-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
   justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
-.suggested-questions button {
-  background: rgba(255,255,255,0.15);
+.suggestion-btn {
+  background-color: #3498db;
+  color: white;
   border: none;
-  padding: 6px 12px;
+  padding: 0.5rem 1rem;
   border-radius: 20px;
-  color: #fff;
-  font-size: 0.85rem;
   cursor: pointer;
-  transition: 0.3s;
+  transition: 0.2s;
 }
 
-.suggested-questions button:hover {
-  background: rgba(255,255,255,0.3);
+.suggestion-btn:hover {
+  background-color: #2980b9;
 }
 
-.answer-section {
-  margin-top: 20px;
-  max-height: 300px;
+.answer-box {
+  margin-top: 1.5rem;
+  background: white;
+  color: black;
+  padding: 1rem;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 600px;
+  text-align: left;
   overflow-y: auto;
-  background: rgba(255,255,255,0.1);
-  padding: 15px;
-  border-radius: 12px;
-  backdrop-filter: blur(5px);
-  animation: fadeIn 0.5s ease;
+  max-height: 250px;
 }
 
-.answer-text {
-  line-height: 1.6;
-  font-size: 1rem;
+.error-msg {
+  margin-top: 1rem;
+  color: #ff6b6b;
+  font-weight: bold;
 }
 
-.error {
-  color: #ff8a80;
-}
-
-.loader {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20px;
-}
-
-.spinner {
-  border: 4px solid rgba(255,255,255,0.2);
-  border-top: 4px solid #ffeb3b;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  animation: spin 1s linear infinite;
-  margin-bottom: 10px;
-}
-
-@keyframes spin {
-  100% { transform: rotate(360deg); }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* Responsive */
+/* Responsive for mobile */
 @media (max-width: 600px) {
-  .app-header h1 {
-    font-size: 1.5rem;
+  .input-section {
+    flex-direction: column;
   }
-  .answer-section {
-    max-height: 250px;
+
+  .ask-button {
+    width: 100%;
+  }
+
+  .answer-box {
+    font-size: 0.9rem;
   }
 }

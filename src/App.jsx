@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import axios from "axios";
 import "./App.css";
 
+// Backend endpoint
 const API_URL = "https://bible-ai-backend.onrender.com/bible";
 
 export default function App() {
@@ -9,104 +10,101 @@ export default function App() {
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [backendStatus, setBackendStatus] = useState("idle");
-  const answerRef = useRef(null);
+  const [retryCount, setRetryCount] = useState(0);
 
-  const suggestedQuestions = [
+  const suggestions = [
     "What are the fruits of the Spirit?",
-    "Who was King Solomon?",
+    "Tell me about love in Song of Solomon",
+    "Who was Moses?",
+    "Explain the parable of the prodigal son",
     "What does the Bible say about forgiveness?",
-    "Explain Psalm 23",
-    "What is the story of the Good Samaritan?",
+    "Summarize the story of David and Goliath",
+    "What is the Great Commission?",
+    "Who were the 12 disciples?",
+    "What is the meaning of faith in Hebrews 11?",
+    "Explain the Ten Commandments"
   ];
 
-  useEffect(() => {
-    if (answerRef.current) {
-      answerRef.current.scrollTop = answerRef.current.scrollHeight;
-    }
-  }, [answer]);
-
-  const askBible = async (question) => {
-    if (!question.trim()) return;
-    setQuery(question);
+  const fetchAnswer = async (customQuery = query) => {
+    if (!customQuery.trim()) return;
     setLoading(true);
-    setError("");
     setAnswer("");
+    setError("");
 
-    let retries = 3;
-    while (retries > 0) {
-      try {
-        const res = await axios.post(
-          API_URL,
-          {},
-          { params: { query: question }, timeout: 15000 }
-        );
-        setAnswer(res.data.answer || "No answer received.");
-        setLoading(false);
-        setBackendStatus("online");
-        return;
-      } catch (err) {
-        retries--;
-        setBackendStatus("waking");
-        if (retries === 0) {
-          setError("Failed to fetch answer. Please try again.");
-          setLoading(false);
-        } else {
-          await new Promise((r) => setTimeout(r, 2000));
-        }
+    try {
+      const response = await axios.post(API_URL, null, {
+        params: { query: customQuery },
+        timeout: 20000,
+      });
+
+      setAnswer(response.data.answer || "No answer returned.");
+      setRetryCount(0);
+    } catch (err) {
+      if (retryCount < 2) {
+        setRetryCount(retryCount + 1);
+        setAnswer("⏳ Backend might be waking up... Retrying...");
+        setTimeout(() => fetchAnswer(customQuery), 3000);
+      } else {
+        setError("⚠️ Failed to fetch answer. Please try again.");
       }
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    askBible(query);
+    fetchAnswer();
   };
 
   return (
     <div className="app-container">
-      <div className="background-watermark" />
-      <header className="app-header">
-        <h1>📖 Bible AI</h1>
-        <p className="subtitle">Ask any Bible question and get instant answers.</p>
-        {backendStatus === "waking" && (
-          <p className="backend-status">⏳ Backend waking up, please wait...</p>
-        )}
-      </header>
+      <h1 className="title">📖 Bible AI</h1>
+      <p className="subtitle">Ask anything about the Bible</p>
 
-      <form className="query-form" onSubmit={handleSubmit}>
+      <form className="input-section" onSubmit={handleSubmit}>
         <input
           type="text"
-          placeholder="Ask a Bible question..."
+          placeholder="Type your question here..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          className="query-input"
         />
-        <button type="submit" disabled={loading}>
+        <button type="submit" disabled={loading} className="ask-button">
           {loading ? "Loading..." : "Ask"}
         </button>
       </form>
 
-      <div className="suggested-questions">
-        {suggestedQuestions.map((q, idx) => (
-          <button key={idx} onClick={() => askBible(q)}>
-            {q}
-          </button>
-        ))}
+      <div className="suggestions">
+        <h3>Try one of these:</h3>
+        <div className="suggestion-buttons">
+          {suggestions.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => {
+                setQuery(s);
+                fetchAnswer(s);
+              }}
+              className="suggestion-btn"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="answer-section" ref={answerRef}>
-        {loading && (
-          <div className="loader">
-            <div className="spinner"></div>
-            <p>Loading answer...</p>
-          </div>
-        )}
-        {error && <p className="error">{error}</p>}
-        {!loading && answer && <p className="answer-text">{answer}</p>}
-      </div>
+      {answer && (
+        <div className="answer-box">
+          <strong>Answer:</strong>
+          <p>{answer}</p>
+        </div>
+      )}
+
+      {error && <div className="error-msg">{error}</div>}
     </div>
   );
 }
+
 
 
 
