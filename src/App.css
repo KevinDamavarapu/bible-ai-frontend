@@ -1,42 +1,173 @@
-#root {
-  max-width: 1280px;
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  background: linear-gradient(-45deg, #3f51b5, #5c6bc0, #3949ab, #1e3c72);
+  background-size: 400% 400%;
+  animation: gradientBG 15s ease infinite;
+  color: #fff;
+  min-height: 100vh;
+}
+
+@keyframes gradientBG {
+  0% {background-position: 0% 50%;}
+  50% {background-position: 100% 50%;}
+  100% {background-position: 0% 50%;}
+}
+
+.background-watermark {
+  position: fixed;
+  inset: 0;
+  background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Cross_simple.svg/800px-Cross_simple.svg.png') 
+              center/20% no-repeat;
+  opacity: 0.04;
+  z-index: 0;
+}
+
+.app-container {
+  max-width: 600px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 20px;
+  position: relative;
+  z-index: 1;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  background: rgba(30, 60, 114, 0.8);
+  backdrop-filter: blur(6px);
+  padding: 10px 0;
   text-align: center;
+  border-radius: 0 0 12px 12px;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.app-header h1 {
+  margin: 0;
+  font-size: 2rem;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+.subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #ddd;
+}
+
+.backend-status {
+  font-size: 0.85rem;
+  color: #ffeb3b;
+  margin-top: 4px;
+}
+
+.query-form {
+  display: flex;
+  margin: 20px 0;
+  gap: 10px;
+}
+
+.query-form input {
+  flex: 1;
+  padding: 12px;
+  border-radius: 25px;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+}
+
+.query-form button {
+  padding: 12px 20px;
+  border-radius: 25px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  background: #ffeb3b;
+  color: #333;
+  transition: 0.3s;
+}
+
+.query-form button:hover {
+  background: #ffc107;
+}
+
+.suggested-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.suggested-questions button {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  padding: 6px 12px;
+  border-radius: 20px;
+  color: #fff;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.suggested-questions button:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+.answer-section {
+  margin-top: 20px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: rgba(255,255,255,0.1);
+  padding: 15px;
+  border-radius: 12px;
+  backdrop-filter: blur(5px);
+  animation: fadeIn 0.5s ease;
+}
+
+.answer-text {
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+.error {
+  color: #ff8a80;
+}
+
+.loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+}
+
+.spinner {
+  border: 4px solid rgba(255,255,255,0.2);
+  border-top: 4px solid #ffeb3b;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .app-header h1 {
+    font-size: 1.5rem;
   }
-  to {
-    transform: rotate(360deg);
+  .answer-section {
+    max-height: 250px;
   }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
 }

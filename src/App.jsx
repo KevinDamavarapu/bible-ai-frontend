@@ -1,138 +1,113 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import "./App.css";
 
-// ==============================
-// CONFIGURATION
-// ==============================
 const API_URL = "https://bible-ai-backend.onrender.com/bible";
 
-// Suggested starter questions
-const SUGGESTED_QUESTIONS = [
-  "What are the fruits of the Spirit?",
-  "Tell me something about love in Song of Solomon",
-  "Who was Moses in the Bible?",
-  "What is the significance of the Last Supper?",
-  "What are the Ten Commandments?"
-];
-
 export default function App() {
-  const [question, setQuestion] = useState("");
+  const [query, setQuery] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [backendStatus, setBackendStatus] = useState("idle");
   const answerRef = useRef(null);
 
-  // ==============================
-  // FEATURE 1: Auto-scroll to latest answer
-  // ==============================
+  const suggestedQuestions = [
+    "What are the fruits of the Spirit?",
+    "Who was King Solomon?",
+    "What does the Bible say about forgiveness?",
+    "Explain Psalm 23",
+    "What is the story of the Good Samaritan?",
+  ];
+
   useEffect(() => {
     if (answerRef.current) {
       answerRef.current.scrollTop = answerRef.current.scrollHeight;
     }
   }, [answer]);
 
-  // ==============================
-  // FEATURE 2: Ask Bible AI function
-  // ==============================
-  const askBible = async (userQuestion, retryCount = 0) => {
-    if (!userQuestion.trim()) return;
+  const askBible = async (question) => {
+    if (!question.trim()) return;
+    setQuery(question);
     setLoading(true);
     setError("");
     setAnswer("");
 
-    try {
-      const res = await axios.post(API_URL, null, {
-        params: { query: userQuestion },
-        timeout: 15000, // 15s timeout
-      });
-      setAnswer(res.data.answer || "No answer received.");
-    } catch (err) {
-      console.error(err);
-      if (retryCount < 2) {
-        setError("Backend waking up... retrying");
-        setTimeout(() => askBible(userQuestion, retryCount + 1), 3000);
-      } else {
-        setError("Failed to fetch answer. Please try again.");
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        const res = await axios.post(
+          API_URL,
+          {},
+          { params: { query: question }, timeout: 15000 }
+        );
+        setAnswer(res.data.answer || "No answer received.");
+        setLoading(false);
+        setBackendStatus("online");
+        return;
+      } catch (err) {
+        retries--;
+        setBackendStatus("waking");
+        if (retries === 0) {
+          setError("Failed to fetch answer. Please try again.");
+          setLoading(false);
+        } else {
+          await new Promise((r) => setTimeout(r, 2000));
+        }
       }
-    } finally {
-      setLoading(false);
     }
   };
 
-  // ==============================
-  // FEATURE 3: Handle Enter key press
-  // ==============================
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter") {
-      askBible(question);
-    }
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    askBible(query);
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-start bg-gradient-to-r from-blue-50 to-purple-100 p-4">
-      {/* Title */}
-      <h1 className="text-3xl font-bold text-purple-700 mt-4 mb-2">
-        Bible AI
-      </h1>
-      <p className="text-gray-700 mb-4 text-center max-w-xl">
-        Ask any question about the Bible and get an AI-powered answer.
-      </p>
+    <div className="app-container">
+      <div className="background-watermark" />
+      <header className="app-header">
+        <h1>📖 Bible AI</h1>
+        <p className="subtitle">Ask any Bible question and get instant answers.</p>
+        {backendStatus === "waking" && (
+          <p className="backend-status">⏳ Backend waking up, please wait...</p>
+        )}
+      </header>
 
-      {/* FEATURE 4: Suggested Questions */}
-      <div className="flex flex-wrap justify-center gap-2 mb-4">
-        {SUGGESTED_QUESTIONS.map((q, idx) => (
-          <button
-            key={idx}
-            onClick={() => {
-              setQuestion(q);
-              askBible(q);
-            }}
-            className="px-3 py-2 bg-yellow-200 hover:bg-yellow-300 rounded text-sm text-black shadow"
-          >
+      <form className="query-form" onSubmit={handleSubmit}>
+        <input
+          type="text"
+          placeholder="Ask a Bible question..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <button type="submit" disabled={loading}>
+          {loading ? "Loading..." : "Ask"}
+        </button>
+      </form>
+
+      <div className="suggested-questions">
+        {suggestedQuestions.map((q, idx) => (
+          <button key={idx} onClick={() => askBible(q)}>
             {q}
           </button>
         ))}
       </div>
 
-      {/* FEATURE 5: Input box */}
-      <div className="flex gap-2 mb-4 w-full max-w-xl">
-        <input
-          type="text"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={handleKeyPress}
-          placeholder="Type your question..."
-          className="flex-1 p-2 border border-gray-300 rounded shadow focus:outline-none"
-        />
-        <button
-          onClick={() => askBible(question)}
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded shadow"
-        >
-          Ask
-        </button>
+      <div className="answer-section" ref={answerRef}>
+        {loading && (
+          <div className="loader">
+            <div className="spinner"></div>
+            <p>Loading answer...</p>
+          </div>
+        )}
+        {error && <p className="error">{error}</p>}
+        {!loading && answer && <p className="answer-text">{answer}</p>}
       </div>
-
-      {/* FEATURE 6: Loading indicator */}
-      {loading && <p className="text-blue-600 mb-2">⏳ Loading answer...</p>}
-
-      {/* FEATURE 7: Error message */}
-      {error && <p className="text-red-500 mb-2">{error}</p>}
-
-      {/* FEATURE 8: Answer box with autoscroll */}
-      <div
-        ref={answerRef}
-        className="w-full max-w-xl bg-white border border-gray-300 rounded shadow p-4 overflow-y-auto max-h-96 whitespace-pre-wrap text-gray-800"
-      >
-        {answer || (!loading && !error && "Ask a question to see the answer here.")}
-      </div>
-
-      {/* FEATURE 9: Responsive & Mobile Friendly */}
-      <footer className="text-xs text-gray-500 mt-6">
-        Powered by FastAPI + OpenAI | Bible AI Project
-      </footer>
     </div>
   );
 }
+
 
 
 
