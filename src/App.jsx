@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import axios from "axios";
 import "./App.css";
 
-// Backend endpoint
-const API_URL = "https://bible-ai-backend.onrender.com/bible";
+// Use backend URL from .env
+const API_URL = import.meta.env.VITE_API_URL + "/bible";
 
 export default function App() {
   const [query, setQuery] = useState("");
@@ -11,6 +11,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [retryCount, setRetryCount] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState("");
 
   const suggestions = [
     "What are the fruits of the Spirit?",
@@ -37,7 +38,13 @@ export default function App() {
         timeout: 20000,
       });
 
-      setAnswer(response.data.answer || "No answer returned.");
+      if (response.data.answer) {
+        setAnswer(response.data.answer);
+        setLastUpdated(new Date().toLocaleTimeString());
+      } else {
+        setAnswer("No answer returned.");
+      }
+
       setRetryCount(0);
     } catch (err) {
       if (retryCount < 2) {
@@ -71,7 +78,7 @@ export default function App() {
           className="query-input"
         />
         <button type="submit" disabled={loading} className="ask-button">
-          {loading ? "Loading..." : "Ask"}
+          {loading ? "⏳ Thinking..." : "Ask"}
         </button>
       </form>
 
@@ -97,6 +104,7 @@ export default function App() {
         <div className="answer-box">
           <strong>Answer:</strong>
           <p>{answer}</p>
+          {lastUpdated && <small>🕒 Last updated: {lastUpdated}</small>}
         </div>
       )}
 
@@ -104,16 +112,3 @@ export default function App() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
