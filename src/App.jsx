@@ -1,161 +1,91 @@
-import React, { useRef, useState } from "react";
-import axios from "axios";
-import { Toaster, toast } from "react-hot-toast";
-import "./App.css";
+import React, { useState } from "react";
+import toast, { Toaster } from "react-hot-toast";
 
-// Use backend URL from .env
-const API_URL = import.meta.env.VITE_API_URL + "/bible";
-
-export default function App() {
-  const [query, setQuery] = useState("");
+function App() {
+  const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [retryCount, setRetryCount] = useState(0);
-  const [lastUpdated, setLastUpdated] = useState("");
-  const [wakeToastId, setWakeToastId] = useState(null);
 
-  const answerRef = useRef(null);
-
-  const suggestions = [
-    "What are the fruits of the Spirit?",
-    "Tell me about love in Song of Solomon",
-    "Who was Moses?",
-    "Explain the parable of the prodigal son",
-    "What does the Bible say about forgiveness?",
-    "Summarize the story of David and Goliath",
-    "What is the Great Commission?",
-    "Who were the 12 disciples?",
-    "What is the meaning of faith in Hebrews 11?",
-    "Explain the Ten Commandments"
-  ];
-
-  const fetchAnswer = async (customQuery = query) => {
-    if (!customQuery.trim() || loading) return;
+  const handleAsk = async () => {
+    if (!question.trim()) {
+      toast.error("Please enter a question.");
+      return;
+    }
 
     setLoading(true);
     setAnswer("");
-    setError("");
-    setLastUpdated("");
+
+    // Show toast when backend might be waking up
+    toast.loading("Backend might be waking up... Please wait.", {
+      id: "backend-wakeup",
+    });
 
     try {
-      const response = await axios.post(API_URL, null, {
-        params: { query: customQuery },
-        timeout: 20000,
+      const res = await fetch("https://bible-ai-backend.onrender.com/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
       });
 
-      if (response.data?.error) throw new Error(response.data.error);
-
-      setAnswer(response.data?.answer || "No answer returned.");
-      setLastUpdated(new Date().toLocaleTimeString());
-
-      if (wakeToastId) {
-        toast.dismiss(wakeToastId);
-        setWakeToastId(null);
-        toast.success("Backend is ready! Loading complete.");
+      if (!res.ok) {
+        throw new Error("Failed to fetch answer.");
       }
 
-      setRetryCount(0);
+      const data = await res.json();
+      setAnswer(data.answer || "No answer found.");
+
+      // Remove wakeup toast and show success
+      toast.dismiss("backend-wakeup");
+      toast.success("Answer received!");
+    } catch (error) {
+      console.error(error);
+      toast.dismiss("backend-wakeup");
+      toast.error("Error fetching answer.");
+    } finally {
       setLoading(false);
-
-      requestAnimationFrame(() => {
-        answerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    } catch (err) {
-      if (retryCount === 0) {
-        const id = toast.loading("⏳ Waking up the Bible AI backend…");
-        setWakeToastId(id);
-      }
-
-      if (retryCount < 3) {
-        setRetryCount((c) => c + 1);
-        setTimeout(() => fetchAnswer(customQuery), 3000);
-      } else {
-        if (wakeToastId) {
-          toast.dismiss(wakeToastId);
-          setWakeToastId(null);
-        }
-        setError("⚠️ Failed to fetch answer. Please try again.");
-        toast.error("Failed to fetch answer. Please try again.");
-        setLoading(false);
-        setRetryCount(0);
-      }
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    fetchAnswer();
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 text-gray-900 p-6">
-      <Toaster position="top-center" toastOptions={{ duration: 2000 }} />
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center px-4 text-center">
+      <Toaster position="top-center" />
 
-      <h1 className="text-4xl font-bold text-center mb-2">📖 Bible AI</h1>
-      <p className="text-lg text-center text-gray-600 mb-6">Ask anything about the Bible</p>
+      <h1 className="text-4xl font-bold mb-6 text-gray-800">Bible AI</h1>
 
-      <form className="flex justify-center gap-2 mb-8" onSubmit={handleSubmit}>
+      <div className="w-full max-w-xl">
         <input
           type="text"
-          placeholder="Type your question here..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="flex-1 max-w-lg px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring focus:ring-blue-300 disabled:opacity-50"
-          disabled={loading}
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="Ask your question..."
+          className="w-full p-3 border border-gray-300 rounded-lg shadow-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
         <button
-          type="submit"
+          onClick={handleAsk}
           disabled={loading}
-          className="px-5 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+          className={`w-full py-2 px-4 rounded-lg shadow text-white transition-colors ${
+            loading
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-blue-500 hover:bg-blue-600"
+          }`}
         >
-          {loading ? (
-            <>
-              <span className="loader w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Thinking…
-            </>
-          ) : (
-            "Ask"
-          )}
+          {loading ? "Loading..." : "Ask"}
         </button>
-      </form>
-
-      <div className="max-w-3xl mx-auto mb-8">
-        <h3 className="text-lg font-semibold mb-3 text-gray-700">Try one of these:</h3>
-        <div className="flex flex-wrap gap-2">
-          {suggestions.map((s, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                setQuery(s);
-                fetchAnswer(s);
-              }}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg transition disabled:opacity-50"
-              disabled={loading}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
       </div>
 
-      {(answer || error) && (
-        <div
-          ref={answerRef}
-          className="max-w-3xl mx-auto bg-white shadow-lg rounded-lg p-6 border border-gray-200 transition-opacity duration-300"
-        >
-          {answer && (
-            <>
-              <strong className="block mb-2 text-lg">Answer:</strong>
-              <p className="mb-2 text-gray-700 leading-relaxed">{answer}</p>
-              {lastUpdated && (
-                <small className="text-gray-500 block">🕒 Last updated: {lastUpdated}</small>
-              )}
-            </>
-          )}
-          {error && <div className="text-red-500 font-semibold">{error}</div>}
+      {loading && (
+        <p className="mt-4 text-gray-600 animate-pulse">
+          Please wait, backend might be waking up...
+        </p>
+      )}
+
+      {answer && (
+        <div className="mt-6 w-full max-w-xl bg-white border border-gray-200 rounded-lg p-4 shadow overflow-y-auto max-h-64">
+          {answer}
         </div>
       )}
     </div>
   );
 }
+
+export default App;
