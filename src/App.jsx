@@ -22,7 +22,7 @@ export default function App() {
     setQuestion(q);
     setAnswer("");
     setLoading(true);
-    toast.loading("Thinking...");
+    toast.loading("Thinking...", { id: "thinking" }); // single toast with unique id
 
     try {
       const res = await fetch(
@@ -31,7 +31,7 @@ export default function App() {
       );
 
       const data = await res.json();
-      toast.dismiss();
+      toast.dismiss("thinking");
 
       if (data.answer) {
         setAnswer(data.answer);
@@ -40,7 +40,7 @@ export default function App() {
         toast.error("Error: Could not retrieve answer");
       }
     } catch (error) {
-      toast.dismiss();
+      toast.dismiss("thinking");
       toast.error("Error: Could not retrieve answer");
     } finally {
       setLoading(false);
@@ -49,7 +49,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 p-4">
-      <Toaster />
+      <Toaster position="top-center" />
       <div className="bg-white/90 backdrop-blur-sm p-6 rounded-lg shadow-lg max-w-2xl w-full text-center">
         <h1 className="text-3xl font-bold mb-4 text-gray-800">Bible AI</h1>
         <p className="text-gray-600 mb-6">
@@ -67,13 +67,13 @@ export default function App() {
           <button
             onClick={() => askBible(question)}
             disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-r-lg"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-r-lg disabled:opacity-50"
           >
             Ask
           </button>
         </div>
 
-        <div className="mb-6 space-x-2">
+        <div className="mb-6 flex flex-wrap justify-center gap-2">
           {suggestions.map((s, idx) => (
             <button
               key={idx}
@@ -84,12 +84,6 @@ export default function App() {
             </button>
           ))}
         </div>
-
-        {loading && (
-          <p className="text-blue-600 font-medium animate-pulse">
-            Thinking...
-          </p>
-        )}
 
         {answer && (
           <div className="mt-4 p-4 bg-gray-100 rounded-lg text-left whitespace-pre-wrap">
