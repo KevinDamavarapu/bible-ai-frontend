@@ -1,89 +1,86 @@
 import React, { useState } from "react";
+import "./App.css";
 
-export default function App() {
+function App() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const suggestedQuestions = [
-    "What does the Bible say about love?",
-    "Who was Paul in the Bible?",
-    "Explain the story of David and Goliath",
-    "What is the meaning of the Parable of the Sower?",
+  const suggestions = [
+    "What are the fruits of the Spirit?",
+    "Tell me about love in Song of Solomon",
+    "Who was Moses?",
+    "Explain the parable of the prodigal son",
+    "What does the Bible say about forgiveness?",
+    "Summarize the story of David and Goliath",
+    "What is the Great Commission?",
+    "Who were the 12 disciples?",
+    "What is the meaning of faith in Hebrews 11?",
+    "Explain the Ten Commandments",
   ];
 
-  const handleAsk = async (q) => {
-    const query = q || question;
-    if (!query.trim()) return;
+  const handleAsk = async (e) => {
+    e.preventDefault();
+    if (!question.trim()) return;
 
     setLoading(true);
     setAnswer("");
 
     try {
-      const response = await fetch(
-        `https://bible-ai-wmlk.onrender.com/api/ask`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ question: query }),
-        }
-      );
+      const res = await fetch("https://bible-ai-backend.vercel.app/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      });
 
-      if (!response.ok) {
-        throw new Error("Network response was not ok");
-      }
-
-      const data = await response.json();
+      const data = await res.json();
       setAnswer(data.answer || "No answer found.");
     } catch (error) {
-      console.error("Error fetching answer:", error);
       setAnswer("Error: Could not retrieve answer.");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSuggestionClick = (suggestion) => {
+    setQuestion(suggestion);
+    setTimeout(() => {
+      document.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    }, 0);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-100 to-blue-200 flex flex-col items-center justify-center p-4">
-      <h1 className="text-4xl font-bold mb-6 text-gray-800">Bible AI</h1>
+    <div className="app-container">
+      <div className="content">
+        <h1>📖 Bible AI</h1>
+        <p>Ask anything about the Bible</p>
 
-      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-2xl text-center">
-        <input
-          type="text"
-          placeholder="Ask your question..."
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          className="border border-gray-300 rounded-lg p-3 w-full mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
-        <button
-          onClick={() => handleAsk()}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg mb-4"
-        >
-          Ask
-        </button>
+        <form onSubmit={handleAsk} className="ask-form">
+          <input
+            type="text"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="Type your question here..."
+          />
+          <button type="submit">Ask</button>
+        </form>
 
-        <div className="flex flex-wrap gap-2 justify-center mb-4">
-          {suggestedQuestions.map((q, index) => (
-            <button
-              key={index}
-              onClick={() => handleAsk(q)}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded-full text-sm"
-            >
-              {q}
-            </button>
-          ))}
+        <div className="suggestions">
+          <p>Try one of these:</p>
+          <div className="suggestion-buttons">
+            {suggestions.map((s, idx) => (
+              <button key={idx} onClick={() => handleSuggestionClick(s)}>
+                {s}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="text-left whitespace-pre-wrap">
-          {loading ? (
-            <p className="text-blue-500">Thinking...</p>
-          ) : (
-            answer && <p className="text-gray-700">{answer}</p>
-          )}
-        </div>
+        {loading && <p className="thinking">Thinking...</p>}
+        {answer && !loading && <div className="answer-box">{answer}</div>}
       </div>
     </div>
   );
 }
+
+export default App;
