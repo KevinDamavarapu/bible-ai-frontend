@@ -1,93 +1,102 @@
-import { useState } from "react";
+import React, { useState } from "react";
+import toast, { Toaster } from "react-hot-toast";
 
 export default function App() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const suggestedQuestions = [
+  const suggestions = [
     "What does the Bible say about forgiveness?",
-    "Tell me a verse about hope",
-    "What is the meaning of John 3:16?",
-    "Give me a Bible story about kindness",
-    "What does Proverbs say about wisdom?",
+    "Explain the story of David and Goliath.",
+    "What are the Ten Commandments?",
+    "Who was Paul in the New Testament?"
   ];
 
-  const askQuestion = async (q) => {
-    const finalQuestion = q || question;
-    if (!finalQuestion.trim()) return;
+  const askBible = async (q) => {
+    if (!q.trim()) {
+      toast.error("Please enter a question.");
+      return;
+    }
 
-    setLoading(true);
+    setQuestion(q);
     setAnswer("");
+    setLoading(true);
+    toast.loading("Thinking...");
 
     try {
-      const res = await fetch("https://bible-ai-wmlk.onrender.com/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: finalQuestion }),
-      });
-
-      if (!res.ok) throw new Error("Network response was not ok");
+      const res = await fetch(
+        `https://bible-ai-wmlk.onrender.com/bible?query=${encodeURIComponent(q)}`,
+        { method: "POST" }
+      );
 
       const data = await res.json();
-      setAnswer(data.answer || "No answer found.");
+      toast.dismiss();
+
+      if (data.answer) {
+        setAnswer(data.answer);
+        toast.success("Got the answer!");
+      } else {
+        toast.error("Error: Could not retrieve answer");
+      }
     } catch (error) {
-      console.error("Error fetching answer:", error);
-      setAnswer("Error: Could not retrieve answer.");
+      toast.dismiss();
+      toast.error("Error: Could not retrieve answer");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 px-4">
-      <h1 className="text-4xl font-bold mb-6 text-center text-gray-800">
-        Bible AI
-      </h1>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 p-4">
+      <Toaster />
+      <div className="bg-white/90 backdrop-blur-sm p-6 rounded-lg shadow-lg max-w-2xl w-full text-center">
+        <h1 className="text-3xl font-bold mb-4 text-gray-800">Bible AI</h1>
+        <p className="text-gray-600 mb-6">
+          Ask any question about the Bible and get answers with scripture references.
+        </p>
 
-      {/* Suggested Questions */}
-      <div className="flex flex-wrap justify-center gap-3 mb-6 max-w-3xl">
-        {suggestedQuestions.map((sq, idx) => (
+        <div className="mb-4 flex">
+          <input
+            type="text"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="Type your question here..."
+            className="flex-grow p-2 border rounded-l-lg focus:outline-none"
+          />
           <button
-            key={idx}
-            onClick={() => askQuestion(sq)}
-            className="bg-white shadow-md rounded-full px-5 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+            onClick={() => askBible(question)}
+            disabled={loading}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-r-lg"
           >
-            {sq}
+            Ask
           </button>
-        ))}
-      </div>
-
-      {/* Input Box */}
-      <div className="flex flex-col items-center w-full max-w-2xl space-y-4">
-        <input
-          type="text"
-          placeholder="Ask your question..."
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          className="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
-        <button
-          onClick={() => askQuestion()}
-          disabled={loading}
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
-        >
-          Ask
-        </button>
-      </div>
-
-      {/* Answer Box */}
-      {loading && (
-        <div className="mt-6 p-4 bg-white rounded-lg shadow-md max-w-2xl w-full text-center">
-          Thinking…
         </div>
-      )}
 
-      {!loading && answer && (
-        <div className="mt-6 p-4 bg-white rounded-lg shadow-md max-w-2xl w-full text-gray-800 whitespace-pre-wrap">
-          {answer}
+        <div className="mb-6 space-x-2">
+          {suggestions.map((s, idx) => (
+            <button
+              key={idx}
+              onClick={() => askBible(s)}
+              className="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-full text-sm"
+            >
+              {s}
+            </button>
+          ))}
         </div>
-      )}
+
+        {loading && (
+          <p className="text-blue-600 font-medium animate-pulse">
+            Thinking...
+          </p>
+        )}
+
+        {answer && (
+          <div className="mt-4 p-4 bg-gray-100 rounded-lg text-left whitespace-pre-wrap">
+            {answer}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
