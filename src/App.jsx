@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import axios from "axios";
+import { Toaster, toast } from "react-hot-toast";
 import "./App.css";
 
 // Use backend URL from .env
@@ -12,6 +13,9 @@ export default function App() {
   const [error, setError] = useState("");
   const [retryCount, setRetryCount] = useState(0);
   const [lastUpdated, setLastUpdated] = useState("");
+  const [wakeToastId, setWakeToastId] = useState(null);
+
+  const answerRef = useRef(null);
 
   const suggestions = [
     "What are the fruits of the Spirit?",
@@ -27,10 +31,13 @@ export default function App() {
   ];
 
   const fetchAnswer = async (customQuery = query) => {
-    if (!customQuery.trim()) return;
+    if (!customQuery.trim() || loading) return;
+
     setLoading(true);
     setAnswer("");
     setError("");
+    setLastUpdated("");
+    // IMPORTANT: do not reset retryCount here — only on success or final failure
 
     try {
       const response = await axios.post(API_URL, null, {
@@ -38,24 +45,47 @@ export default function App() {
         timeout: 20000,
       });
 
-      if (response.data.answer) {
-        setAnswer(response.data.answer);
-        setLastUpdated(new Date().toLocaleTimeString());
-      } else {
-        setAnswer("No answer returned.");
+      if (response.data?.error) throw new Error(response.data.error);
+
+      setAnswer(response.data?.answer || "No answer returned.");
+      setLastUpdated(new Date().toLocaleTimeString());
+
+      // If we showed a "waking up" toast, close it and show success
+      if (wakeToastId) {
+        toast.dismiss(wakeToastId);
+        setWakeToastId(null);
+        toast.success("Backend is ready! Loading complete.");
       }
 
       setRetryCount(0);
+      setLoading(false);
+
+      // Smooth scroll to the answer once it's rendered
+      requestAnimationFrame(() => {
+        answerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     } catch (err) {
-      if (retryCount < 2) {
-        setRetryCount(retryCount + 1);
-        setAnswer("⏳ Backend might be waking up... Retrying...");
+      // First failure => likely backend waking — show loading toast once
+      if (retryCount === 0) {
+        const id = toast.loading("⏳ Waking up the Bible AI backend…");
+        setWakeToastId(id);
+      }
+
+      if (retryCount < 3) {
+        setRetryCount((c) => c + 1);
+        // Keep loading=true during retries
         setTimeout(() => fetchAnswer(customQuery), 3000);
       } else {
+        // Final failure
+        if (wakeToastId) {
+          toast.dismiss(wakeToastId);
+          setWakeToastId(null);
+        }
         setError("⚠️ Failed to fetch answer. Please try again.");
+        toast.error("Failed to fetch answer. Please try again.");
+        setLoading(false);
+        setRetryCount(0);
       }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -66,6 +96,9 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {/* Toast container */}
+      <Toaster position="top-center" toastOptions={{ duration: 2000 }} />
+
       <h1 className="title">📖 Bible AI</h1>
       <p className="subtitle">Ask anything about the Bible</p>
 
@@ -76,9 +109,18 @@ export default function App() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="query-input"
+          disabled={loading}
+          aria-busy={loading}
         />
         <button type="submit" disabled={loading} className="ask-button">
-          {loading ? "⏳ Thinking..." : "Ask"}
+          {loading ? (
+            <>
+              <span className="loader" aria-hidden="true" />
+              Thinking…
+            </>
+          ) : (
+            "Ask"
+          )}
         </button>
       </form>
 
@@ -93,6 +135,7 @@ export default function App() {
                 fetchAnswer(s);
               }}
               className="suggestion-btn"
+              disabled={loading}
             >
               {s}
             </button>
@@ -100,15 +143,18 @@ export default function App() {
         </div>
       </div>
 
-      {answer && (
-        <div className="answer-box">
-          <strong>Answer:</strong>
-          <p>{answer}</p>
-          {lastUpdated && <small>🕒 Last updated: {lastUpdated}</small>}
+      {(answer || error) && (
+        <div ref={answerRef} className="answer-box fade-in">
+          {answer && (
+            <>
+              <strong>Answer:</strong>
+              <p>{answer}</p>
+              {lastUpdated && <small>🕒 Last updated: {lastUpdated}</small>}
+            </>
+          )}
+          {error && <div className="error-msg">{error}</div>}
         </div>
       )}
-
-      {error && <div className="error-msg">{error}</div>}
     </div>
   );
 }
