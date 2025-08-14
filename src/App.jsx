@@ -1,107 +1,160 @@
-import { useState } from "react";
-import toast, { Toaster } from "react-hot-toast";
+import React, { useRef, useState } from "react";
+import axios from "axios";
+import { Toaster, toast } from "react-hot-toast";
+import "./App.css";
+
+// Use backend URL from .env
+const API_URL = import.meta.env.VITE_API_URL + "/bible";
 
 export default function App() {
-  const [question, setQuestion] = useState("");
+  const [query, setQuery] = useState("");
   const [answer, setAnswer] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState("");
+  const [wakeToastId, setWakeToastId] = useState(null);
 
-  // Your suggested questions
+  const answerRef = useRef(null);
+
   const suggestions = [
+    "What are the fruits of the Spirit?",
+    "Tell me about love in Song of Solomon",
+    "Who was Moses?",
+    "Explain the parable of the prodigal son",
     "What does the Bible say about forgiveness?",
-    "Explain the parable of the prodigal son.",
-    "What is faith according to the Bible?",
+    "Summarize the story of David and Goliath",
+    "What is the Great Commission?",
+    "Who were the 12 disciples?",
+    "What is the meaning of faith in Hebrews 11?",
+    "Explain the Ten Commandments"
   ];
 
-  // Main ask handler
-  const handleAsk = async (q) => {
-    const finalQuestion = q || question;
+  const fetchAnswer = async (customQuery = query) => {
+    if (!customQuery.trim() || loading) return;
 
-    if (!finalQuestion.trim()) {
-      toast.error("Please enter a question before asking.");
-      return;
-    }
-
-    setIsLoading(true);
+    setLoading(true);
     setAnswer("");
+    setError("");
+    setLastUpdated("");
+    // IMPORTANT: do not reset retryCount here — only on success or final failure
 
     try {
-      // Call your backend API
-      const res = await fetch("/api/ask", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ question: finalQuestion }),
+      const response = await axios.post(API_URL, null, {
+        params: { query: customQuery },
+        timeout: 20000,
       });
 
-      if (!res.ok) throw new Error("Failed to get response from server.");
+      if (response.data?.error) throw new Error(response.data.error);
 
-      const data = await res.json();
-      setAnswer(data.answer || "No answer received.");
-      toast.success("Answer received!");
-    } catch (error) {
-      console.error(error);
-      toast.error("Something went wrong. Please try again.");
-    } finally {
-      setIsLoading(false);
+      setAnswer(response.data?.answer || "No answer returned.");
+      setLastUpdated(new Date().toLocaleTimeString());
+
+      // If we showed a "waking up" toast, close it and show success
+      if (wakeToastId) {
+        toast.dismiss(wakeToastId);
+        setWakeToastId(null);
+        toast.success("Backend is ready! Loading complete.");
+      }
+
+      setRetryCount(0);
+      setLoading(false);
+
+      // Smooth scroll to the answer once it's rendered
+      requestAnimationFrame(() => {
+        answerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    } catch (err) {
+      // First failure => likely backend waking — show loading toast once
+      if (retryCount === 0) {
+        const id = toast.loading("⏳ Waking up the Bible AI backend…");
+        setWakeToastId(id);
+      }
+
+      if (retryCount < 3) {
+        setRetryCount((c) => c + 1);
+        // Keep loading=true during retries
+        setTimeout(() => fetchAnswer(customQuery), 3000);
+      } else {
+        // Final failure
+        if (wakeToastId) {
+          toast.dismiss(wakeToastId);
+          setWakeToastId(null);
+        }
+        setError("⚠️ Failed to fetch answer. Please try again.");
+        toast.error("Failed to fetch answer. Please try again.");
+        setLoading(false);
+        setRetryCount(0);
+      }
     }
   };
 
-  // Handler for suggested questions
-  const handleSuggestionClick = (q) => {
-    setQuestion(q);
-    handleAsk(q);
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    fetchAnswer();
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 p-6">
-      <Toaster position="top-right" />
+    <div className="app-container">
+      {/* Toast container */}
+      <Toaster position="top-center" toastOptions={{ duration: 2000 }} />
 
-      {/* Title */}
-      <h1 className="text-4xl font-bold text-gray-800 mb-8 text-center">
-        Bible AI
-      </h1>
+      <h1 className="title">📖 Bible AI</h1>
+      <p className="subtitle">Ask anything about the Bible</p>
 
-      {/* Suggested questions */}
-      <div className="flex flex-wrap gap-3 justify-center mb-6">
-        {suggestions.map((s, idx) => (
-          <button
-            key={idx}
-            onClick={() => handleSuggestionClick(s)}
-            className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg text-sm shadow transition"
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-
-      {/* Input & Button */}
-      <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-2xl">
+      <form className="input-section" onSubmit={handleSubmit}>
         <input
           type="text"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Ask your question..."
-          className="flex-1 px-4 py-3 border border-gray-300 rounded-lg shadow focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
+          placeholder="Type your question here..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="query-input"
+          disabled={loading}
+          aria-busy={loading}
         />
-        <button
-          onClick={() => handleAsk()}
-          disabled={isLoading}
-          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow disabled:opacity-50 disabled:cursor-not-allowed transition"
-        >
-          {isLoading ? "Thinking..." : "Ask"}
+        <button type="submit" disabled={loading} className="ask-button">
+          {loading ? (
+            <>
+              <span className="loader" aria-hidden="true" />
+              Thinking…
+            </>
+          ) : (
+            "Ask"
+          )}
         </button>
+      </form>
+
+      <div className="suggestions">
+        <h3>Try one of these:</h3>
+        <div className="suggestion-buttons">
+          {suggestions.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => {
+                setQuery(s);
+                fetchAnswer(s);
+              }}
+              className="suggestion-btn"
+              disabled={loading}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Answer box */}
-      <div className="mt-8 w-full max-w-2xl">
-        {answer && (
-          <div className="p-6 bg-white rounded-lg shadow text-gray-800 whitespace-pre-wrap">
-            {answer}
-          </div>
-        )}
-      </div>
+      {(answer || error) && (
+        <div ref={answerRef} className="answer-box fade-in">
+          {answer && (
+            <>
+              <strong>Answer:</strong>
+              <p>{answer}</p>
+              {lastUpdated && <small>🕒 Last updated: {lastUpdated}</small>}
+            </>
+          )}
+          {error && <div className="error-msg">{error}</div>}
+        </div>
+      )}
     </div>
   );
 }
