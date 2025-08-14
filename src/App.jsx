@@ -1,86 +1,141 @@
 import React, { useState } from "react";
-import toast, { Toaster } from "react-hot-toast";
+import "./App.css";
 
 function App() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleAsk = async () => {
-    if (!question.trim()) {
-      toast.error("Please enter a question.");
-      return;
-    }
+  const suggestions = [
+    "What are the fruits of the Spirit?",
+    "Tell me about love in Song of Solomon",
+    "Who was Moses?",
+    "Explain the parable of the prodigal son",
+    "What does the Bible say about forgiveness?",
+    "Summarize the story of David and Goliath",
+    "What is the Great Commission?",
+    "Who were the 12 disciples?",
+    "What is the meaning of faith in Hebrews 11?",
+    "Explain the Ten Commandments",
+  ];
 
+  const askQuestion = async (q) => {
+    if (!q.trim()) return;
     setLoading(true);
     setAnswer("");
-
-    // Show toast when backend might be waking up
-    toast.loading("Backend might be waking up... Please wait.", {
-      id: "backend-wakeup",
-    });
-
     try {
-      const res = await fetch("https://bible-ai-backend.onrender.com/ask", {
+      const response = await fetch("https://bible-ai-backend.vercel.app/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question: q }),
       });
-
-      if (!res.ok) {
-        throw new Error("Failed to fetch answer.");
-      }
-
-      const data = await res.json();
+      const data = await response.json();
       setAnswer(data.answer || "No answer found.");
-
-      // Remove wakeup toast and show success
-      toast.dismiss("backend-wakeup");
-      toast.success("Answer received!");
     } catch (error) {
-      console.error(error);
-      toast.dismiss("backend-wakeup");
-      toast.error("Error fetching answer.");
-    } finally {
-      setLoading(false);
+      setAnswer("Error: Unable to get an answer.");
     }
+    setLoading(false);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    askQuestion(question);
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center px-4 text-center">
-      <Toaster position="top-center" />
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "linear-gradient(to right, #1f4037, #99f2c8)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "2rem",
+        textAlign: "center",
+      }}
+    >
+      <h1 style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📖 Bible AI</h1>
+      <p>Ask anything about the Bible</p>
 
-      <h1 className="text-4xl font-bold mb-6 text-gray-800">Bible AI</h1>
-
-      <div className="w-full max-w-xl">
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          gap: "0.5rem",
+          marginBottom: "1rem",
+          flexWrap: "wrap",
+        }}
+      >
         <input
           type="text"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Ask your question..."
-          className="w-full p-3 border border-gray-300 rounded-lg shadow-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400"
+          placeholder="Type your question here..."
+          style={{
+            padding: "0.5rem",
+            borderRadius: "5px",
+            border: "1px solid #ccc",
+            width: "300px",
+          }}
         />
         <button
-          onClick={handleAsk}
-          disabled={loading}
-          className={`w-full py-2 px-4 rounded-lg shadow text-white transition-colors ${
-            loading
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-blue-500 hover:bg-blue-600"
-          }`}
+          type="submit"
+          style={{
+            padding: "0.5rem 1rem",
+            borderRadius: "5px",
+            border: "none",
+            background: "#000",
+            color: "#fff",
+            cursor: "pointer",
+          }}
         >
-          {loading ? "Loading..." : "Ask"}
+          Ask
         </button>
+      </form>
+
+      <h3>Try one of these:</h3>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "0.5rem",
+          justifyContent: "center",
+          maxWidth: "800px",
+        }}
+      >
+        {suggestions.map((s, i) => (
+          <button
+            key={i}
+            onClick={() => askQuestion(s)}
+            style={{
+              background: "#000",
+              color: "#fff",
+              padding: "0.5rem 1rem",
+              borderRadius: "10px",
+              border: "none",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {s}
+          </button>
+        ))}
       </div>
 
-      {loading && (
-        <p className="mt-4 text-gray-600 animate-pulse">
-          Please wait, backend might be waking up...
-        </p>
-      )}
-
+      {loading && <p style={{ marginTop: "1rem" }}>Loading...</p>}
       {answer && (
-        <div className="mt-6 w-full max-w-xl bg-white border border-gray-200 rounded-lg p-4 shadow overflow-y-auto max-h-64">
+        <div
+          style={{
+            background: "white",
+            padding: "1rem",
+            borderRadius: "5px",
+            marginTop: "1rem",
+            maxWidth: "800px",
+            textAlign: "justify",
+          }}
+        >
           {answer}
         </div>
       )}
