@@ -1,146 +1,132 @@
-import React, { useRef, useState } from "react";
-import axios from "axios";
-import { Toaster, toast } from "react-hot-toast";
-import "./App.css";
+import { useState } from "react";
+import toast, { Toaster } from "react-hot-toast";
 
-// Use backend URL from .env (Vercel/Vite). Fallback to your Render URL.
-const API_BASE =
-  import.meta.env.VITE_API_URL || "https://bible-ai-wmlk.onrender.com";
-const API_URL = `${API_BASE}/bible`;
-
-export default function App() {
+function App() {
   const [query, setQuery] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [retryCount, setRetryCount] = useState(0);
-  const [lastUpdated, setLastUpdated] = useState("");
+  const [history, setHistory] = useState([]);
 
-  const answerRef = useRef(null);
-
-  const suggestions = [
-    "What are the fruits of the Spirit?",
-    "Tell me about love in Song of Solomon",
-    "Who was Moses?",
-    "Explain the parable of the prodigal son",
-    "What does the Bible say about forgiveness?",
-    "Summarize the story of David and Goliath",
-    "What is the Great Commission?",
-    "Who were the 12 disciples?",
-    "What is the meaning of faith in Hebrews 11?",
-    "Explain the Ten Commandments",
-  ];
-
-  const fetchAnswer = async (customQuery = query) => {
-  if (!customQuery.trim() || loading) return;
-
-  // reset UI
-  setLoading(true);
-  setAnswer("");
-  setError("");
-  setLastUpdated("");
-
-  // 🔔 Single persistent toast (no duplicates)
-  toast.loading("Thinking…", { id: "status" });
-
-  try {
-    const res = await axios.post(
-      API_URL,
-      null,
-      { params: { query: customQuery }, timeout: 20000 }
-    );
-
-    if (res.data?.error) throw new Error(res.data.error);
-
-    setAnswer(res.data?.answer || "No answer returned.");
-    setLastUpdated(new Date().toLocaleTimeString());
-    setRetryCount(0);
-    setLoading(false);
-
-    // 🔔 Replace the *same* toast — only one "Answer ready"
-    toast.success("Answer ready", { id: "status" });
-
-    // Smooth scroll to the answer once it's rendered
-    requestAnimationFrame(() => {
-      answerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  } catch (err) {
-    if (retryCount < 3) {
-      const next = retryCount + 1;
-      setRetryCount(next);
-      // 🔔 Update the same toast while retrying
-      toast.loading(`Waking backend… retry ${next}/3`, { id: "status" });
-      setTimeout(() => fetchAnswer(customQuery), 3000);
-    } else {
-      setError("⚠️ Failed to fetch answer. Please try again.");
-      setLoading(false);
-      setRetryCount(0);
-      // 🔔 Replace the toast with error — still only one
-      toast.error("Failed to fetch answer. Please try again.", { id: "status" });
+  const fetchAnswer = async (userQuery) => {
+    if (!userQuery.trim()) {
+      toast.error("Please enter a question!");
+      return;
     }
-  }
-};
 
+    setLoading(true);
+    setAnswer("");
+    toast.dismiss();
+    toast.loading("Thinking...");
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    fetchAnswer();
+    try {
+      // Fake API call simulation (replace with your API)
+      const res = await new Promise((resolve) =>
+        setTimeout(() => resolve({ text: "Sample answer for: " + userQuery }), 1500)
+      );
+
+      setAnswer(res.text);
+
+      // Update query history (max 5)
+      setHistory((prev) => {
+        const updated = [userQuery, ...prev.filter((q) => q !== userQuery)];
+        return updated.slice(0, 5);
+      });
+
+      toast.dismiss();
+      toast.success("Answer ready!", { position: "top-center" });
+    } catch (err) {
+      toast.dismiss();
+      toast.error("Something went wrong!");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = () => {
+    if (!answer) return;
+    navigator.clipboard.writeText(answer);
+    toast.success("Copied to clipboard!", { position: "top-center" });
+  };
+
+  const handleShare = async () => {
+    if (!answer) return;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "Bible AI Answer", text: answer });
+      } else {
+        navigator.clipboard.writeText(answer);
+        toast.success("Answer copied for sharing!", { position: "top-center" });
+      }
+    } catch (err) {
+      toast.error("Share failed!");
+    }
   };
 
   return (
     <div className="app-container">
-      {/* Toaster stays for retries/errors/success only */}
-      <Toaster position="top-center" />
+      <h1 className="title">Bible AI</h1>
+      <p className="subtitle">Ask anything, get wisdom instantly</p>
 
-      <h1 className="title">📖 Bible AI</h1>
-      <p className="subtitle">Ask anything about the Bible</p>
-
-      <form className="input-section" onSubmit={handleSubmit}>
+      <div className="input-section">
         <input
+          className="query-input"
           type="text"
-          placeholder="Type your question here..."
+          placeholder="Ask your question..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="query-input"
           disabled={loading}
-          aria-busy={loading}
         />
-        <button type="submit" disabled={loading} className="ask-button">
-          {loading ? "Thinking…" : "Ask"}
+        <button
+          className="ask-button"
+          onClick={() => fetchAnswer(query)}
+          disabled={loading}
+        >
+          {loading ? "Thinking..." : "Ask"}
         </button>
-      </form>
-
-      <div className="suggestions">
-        <h3>Try one of these:</h3>
-        <div className="suggestion-buttons">
-          {suggestions.map((s, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                setQuery(s);
-                fetchAnswer(s);
-              }}
-              className="suggestion-btn"
-              disabled={loading}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
       </div>
 
-      {(answer || error) && (
-        <div ref={answerRef} className="answer-box">
-          {answer && (
-            <>
-              <strong>Answer:</strong>
-              <p>{answer}</p>
-              {lastUpdated && <small>🕒 Last updated: {lastUpdated}</small>}
-            </>
-          )}
-          {error && <div className="error-msg">{error}</div>}
+      {/* History */}
+      {history.length > 0 && (
+        <div className="suggestions">
+          <p>Recent questions:</p>
+          <div className="suggestion-buttons">
+            {history.map((item, idx) => (
+              <button
+                key={idx}
+                className="suggestion-btn"
+                onClick={() => {
+                  setQuery(item);
+                  fetchAnswer(item);
+                }}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
         </div>
       )}
+
+      {/* Answer Box */}
+      {answer && (
+        <div className="answer-box fade-in">
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <strong>Answer:</strong>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={handleCopy} className="suggestion-btn">
+                📋 Copy
+              </button>
+              <button onClick={handleShare} className="suggestion-btn">
+                🔗 Share
+              </button>
+            </div>
+          </div>
+          <p>{answer}</p>
+        </div>
+      )}
+
+      <Toaster position="top-center" />
     </div>
   );
 }
+
+export default App;
