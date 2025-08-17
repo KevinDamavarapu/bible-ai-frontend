@@ -32,49 +32,55 @@ export default function App() {
   ];
 
   const fetchAnswer = async (customQuery = query) => {
-    if (!customQuery.trim() || loading) return;
+  if (!customQuery.trim() || loading) return;
 
-    // reset UI (keeps your layout & styling intact)
-    setLoading(true);
-    setAnswer("");
-    setError("");
-    setLastUpdated("");
+  // reset UI
+  setLoading(true);
+  setAnswer("");
+  setError("");
+  setLastUpdated("");
 
-    try {
-      const res = await axios.post(
-        API_URL,
-        null,
-        { params: { query: customQuery }, timeout: 20000 }
-      );
+  // 🔔 Single persistent toast (no duplicates)
+  toast.loading("Thinking…", { id: "status" });
 
-      if (res.data?.error) throw new Error(res.data.error);
+  try {
+    const res = await axios.post(
+      API_URL,
+      null,
+      { params: { query: customQuery }, timeout: 20000 }
+    );
 
-      setAnswer(res.data?.answer || "No answer returned.");
-      setLastUpdated(new Date().toLocaleTimeString());
-      setRetryCount(0);
+    if (res.data?.error) throw new Error(res.data.error);
+
+    setAnswer(res.data?.answer || "No answer returned.");
+    setLastUpdated(new Date().toLocaleTimeString());
+    setRetryCount(0);
+    setLoading(false);
+
+    // 🔔 Replace the *same* toast — only one "Answer ready"
+    toast.success("Answer ready", { id: "status" });
+
+    // Smooth scroll to the answer once it's rendered
+    requestAnimationFrame(() => {
+      answerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  } catch (err) {
+    if (retryCount < 3) {
+      const next = retryCount + 1;
+      setRetryCount(next);
+      // 🔔 Update the same toast while retrying
+      toast.loading(`Waking backend… retry ${next}/3`, { id: "status" });
+      setTimeout(() => fetchAnswer(customQuery), 3000);
+    } else {
+      setError("⚠️ Failed to fetch answer. Please try again.");
       setLoading(false);
-
-      // toast only when done
-      toast.success("Answer ready");
-
-      // Smooth scroll to the answer once it's rendered
-      requestAnimationFrame(() => {
-        answerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    } catch (err) {
-      if (retryCount < 3) {
-        const next = retryCount + 1;
-        setRetryCount(next);
-        toast.loading(`Waking backend… retry ${next}/3`);
-        setTimeout(() => fetchAnswer(customQuery), 3000);
-      } else {
-        setError("⚠️ Failed to fetch answer. Please try again.");
-        setLoading(false);
-        setRetryCount(0);
-        toast.error("Failed to fetch answer. Please try again.");
-      }
+      setRetryCount(0);
+      // 🔔 Replace the toast with error — still only one
+      toast.error("Failed to fetch answer. Please try again.", { id: "status" });
     }
-  };
+  }
+};
+
 
   const handleSubmit = (e) => {
     e.preventDefault();
