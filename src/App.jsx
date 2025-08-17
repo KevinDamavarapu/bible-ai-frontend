@@ -1,132 +1,111 @@
 import { useState } from "react";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 
-function App() {
+export default function App() {
   const [query, setQuery] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
 
-  const fetchAnswer = async (userQuery) => {
-    if (!userQuery.trim()) {
-      toast.error("Please enter a question!");
-      return;
-    }
-
+  const fetchAnswer = async () => {
+    if (!query.trim()) return;
     setLoading(true);
     setAnswer("");
-    toast.dismiss();
-    toast.loading("Thinking...");
+    toast.loading("Thinking...", { id: "thinking" });
 
     try {
-      // Fake API call simulation (replace with your API)
-      const res = await new Promise((resolve) =>
-        setTimeout(() => resolve({ text: "Sample answer for: " + userQuery }), 1500)
-      );
-
-      setAnswer(res.text);
-
-      // Update query history (max 5)
-      setHistory((prev) => {
-        const updated = [userQuery, ...prev.filter((q) => q !== userQuery)];
-        return updated.slice(0, 5);
+      const res = await fetch("https://bible-ai-wmlk.onrender.com/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: query }),
       });
 
-      toast.dismiss();
-      toast.success("Answer ready!", { position: "top-center" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+
+      setAnswer(data.answer || "No answer found.");
+      setHistory((prev) => [query, ...prev.slice(0, 4)]); // save last 5
+      toast.success("Answer ready!", { id: "thinking" });
     } catch (err) {
-      toast.dismiss();
-      toast.error("Something went wrong!");
+      console.error(err);
+      toast.error("Something went wrong", { id: "thinking" });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCopy = () => {
-    if (!answer) return;
-    navigator.clipboard.writeText(answer);
-    toast.success("Copied to clipboard!", { position: "top-center" });
-  };
-
-  const handleShare = async () => {
-    if (!answer) return;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: "Bible AI Answer", text: answer });
-      } else {
-        navigator.clipboard.writeText(answer);
-        toast.success("Answer copied for sharing!", { position: "top-center" });
-      }
-    } catch (err) {
-      toast.error("Share failed!");
-    }
-  };
-
   return (
-    <div className="app-container">
+    <div className="app">
       <h1 className="title">Bible AI</h1>
-      <p className="subtitle">Ask anything, get wisdom instantly</p>
 
-      <div className="input-section">
+      <div className="input-box">
         <input
-          className="query-input"
           type="text"
-          placeholder="Ask your question..."
           value={query}
+          placeholder="Ask me anything about the Bible..."
           onChange={(e) => setQuery(e.target.value)}
-          disabled={loading}
+          onKeyDown={(e) => e.key === "Enter" && fetchAnswer()}
         />
-        <button
-          className="ask-button"
-          onClick={() => fetchAnswer(query)}
-          disabled={loading}
-        >
+        <button onClick={fetchAnswer} disabled={loading}>
           {loading ? "Thinking..." : "Ask"}
         </button>
       </div>
 
-      {/* History */}
-      {history.length > 0 && (
-        <div className="suggestions">
-          <p>Recent questions:</p>
-          <div className="suggestion-buttons">
-            {history.map((item, idx) => (
-              <button
-                key={idx}
-                className="suggestion-btn"
-                onClick={() => {
-                  setQuery(item);
-                  fetchAnswer(item);
-                }}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Answer Box */}
       {answer && (
-        <div className="answer-box fade-in">
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <strong>Answer:</strong>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={handleCopy} className="suggestion-btn">
-                📋 Copy
-              </button>
-              <button onClick={handleShare} className="suggestion-btn">
-                🔗 Share
-              </button>
-            </div>
-          </div>
+        <div className="answer-box">
           <p>{answer}</p>
+
+          {/* Copy + Share buttons */}
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+            <button
+              className="suggestion-btn"
+              onClick={() => {
+                navigator.clipboard.writeText(answer);
+                toast.success("Copied!");
+              }}
+            >
+              Copy
+            </button>
+
+            <button
+              className="suggestion-btn"
+              onClick={() => {
+                if (navigator.share) {
+                  navigator
+                    .share({ text: answer })
+                    .catch(() => toast.error("Share failed"));
+                } else {
+                  navigator.clipboard.writeText(answer);
+                  toast.success("Copied (no share available)");
+                }
+              }}
+            >
+              Share
+            </button>
+          </div>
         </div>
       )}
 
-      <Toaster position="top-center" />
+      {/* Recent Questions history */}
+      {history.length > 0 && (
+        <div
+          style={{
+            marginTop: "1.5rem",
+            textAlign: "left",
+            width: "90%",
+            maxWidth: "600px",
+          }}
+        >
+          <h3 style={{ marginBottom: "0.5rem" }}>Recent Questions</h3>
+          <ul>
+            {history.map((q, i) => (
+              <li key={i} style={{ marginBottom: "0.25rem" }}>
+                • {q}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
-
-export default App;
