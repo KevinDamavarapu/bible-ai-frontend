@@ -34,14 +34,11 @@ export default function App() {
   const fetchAnswer = async (customQuery = query) => {
     if (!customQuery.trim() || loading) return;
 
-    // reset UI (keeps your exact layout)
+    // reset UI (keeps your layout & styling intact)
     setLoading(true);
     setAnswer("");
     setError("");
     setLastUpdated("");
-
-    // Single persistent toast (prevents duplicates)
-    toast.loading("Thinking…", { id: "status" });
 
     try {
       const res = await axios.post(
@@ -57,8 +54,8 @@ export default function App() {
       setRetryCount(0);
       setLoading(false);
 
-      // replace the same toast
-      toast.success("Answer ready", { id: "status" });
+      // toast only when done
+      toast.success("Answer ready");
 
       // Smooth scroll to the answer once it's rendered
       requestAnimationFrame(() => {
@@ -68,14 +65,13 @@ export default function App() {
       if (retryCount < 3) {
         const next = retryCount + 1;
         setRetryCount(next);
-        // Update the same toast while retrying (no new toasts)
-        toast.loading(`Waking backend… retry ${next}/3`, { id: "status" });
+        toast.loading(`Waking backend… retry ${next}/3`);
         setTimeout(() => fetchAnswer(customQuery), 3000);
       } else {
         setError("⚠️ Failed to fetch answer. Please try again.");
         setLoading(false);
         setRetryCount(0);
-        toast.error("Failed to fetch answer. Please try again.", { id: "status" });
+        toast.error("Failed to fetch answer. Please try again.");
       }
     }
   };
@@ -87,7 +83,7 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Single toaster, centered — no duplicates */}
+      {/* Toaster stays for retries/errors/success only */}
       <Toaster position="top-center" />
 
       <h1 className="title">📖 Bible AI</h1>
