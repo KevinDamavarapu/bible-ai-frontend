@@ -15,6 +15,7 @@ export default function App() {
   const [retryCount, setRetryCount] = useState(0);
   const [lastUpdated, setLastUpdated] = useState("");
   const [history, setHistory] = useState([]);
+  const [relatedQuestions, setRelatedQuestions] = useState([]);
 
   const answerRef = useRef(null);
 
@@ -31,6 +32,63 @@ export default function App() {
     "Explain the Ten Commandments",
   ];
 
+  // --- Formatting helpers (do NOT change layout/colors) ---
+  const verseRegex = /\b(?:[1-3]?\s?[A-Z][a-z]+)\s\d{1,3}:\d{1,3}(?:[-–]\d{1,3})?\b/g;
+  const boldTerms =
+    /\b(God|Jesus|Christ|Holy\sSpirit|Spirit|faith|grace|love|hope|salvation|forgiveness)\b/gi;
+
+  const escapeHtml = (s) =>
+    s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+  const formatAnswerHtml = (text) => {
+    if (!text) return "";
+    const safe = escapeHtml(text.trim());
+    const paragraphs = safe.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+
+    const html = paragraphs
+      .map((p) => {
+        let phtml = p
+          .replace(verseRegex, "<em>$&</em>")
+          .replace(boldTerms, "<strong>$&</strong>")
+          .replace(/\n/g, "<br/>");
+        return `<p>${phtml}</p>`;
+      })
+      .join("");
+
+    return html;
+  };
+
+  // --- Related questions generator (lightweight heuristic) ---
+  const generateRelatedQuestions = (q, a) => {
+    const base = [
+      "What related verses support this?",
+      "How can I apply this teaching today?",
+      "Summarize this in one sentence.",
+    ];
+
+    // Try to pull a topic from the query (first capitalized word or key term)
+    const topicMatch =
+      q.match(/\b([A-Z][a-z]{3,}(?:\s[A-Z][a-z]+)?)\b/) ||
+      q.match(/\b(Moses|David|Jesus|Paul|Peter|Spirit|Faith|Love|Grace|Hope)\b/i);
+
+    const topic = topicMatch ? topicMatch[0] : null;
+
+    if (topic) {
+      return [
+        `What key verses about ${topic} should I read next?`,
+        `How does the Bible apply ${topic} to daily life?`,
+        `Can you summarize ${topic} in one sentence?`,
+      ];
+    }
+
+    return base;
+  };
+
   const fetchAnswer = async (customQuery = query) => {
     if (!customQuery.trim() || loading) return;
 
@@ -38,6 +96,7 @@ export default function App() {
     setAnswer("");
     setError("");
     setLastUpdated("");
+    setRelatedQuestions([]);
 
     toast.loading("Thinking…", { id: "status" });
 
@@ -49,7 +108,8 @@ export default function App() {
 
       if (res.data?.error) throw new Error(res.data.error);
 
-      setAnswer(res.data?.answer || "No answer returned.");
+      const text = res.data?.answer || "No answer returned.";
+      setAnswer(text);
       setLastUpdated(new Date().toLocaleTimeString());
       setRetryCount(0);
       setLoading(false);
@@ -59,6 +119,9 @@ export default function App() {
         const newHistory = [customQuery, ...prev.filter((q) => q !== customQuery)];
         return newHistory.slice(0, 5);
       });
+
+      // generate related questions based on query/answer
+      setRelatedQuestions(generateRelatedQuestions(customQuery, text));
 
       toast.success("Answer ready", { id: "status" });
 
@@ -96,7 +159,7 @@ export default function App() {
     if (navigator.share) {
       try {
         await navigator.share({ title: "Bible AI", text: answer });
-      } catch (err) {
+      } catch {
         toast.error("Sharing cancelled");
       }
     } else {
@@ -172,8 +235,14 @@ export default function App() {
           {answer && (
             <>
               <strong>Answer:</strong>
-              <p>{answer}</p>
+              {/* formatted HTML (paragraphs + italics for verse refs + bold key terms) */}
+              <div
+                className="formatted-answer"
+                dangerouslySetInnerHTML={{ __html: formatAnswerHtml(answer) }}
+              />
               {lastUpdated && <small>🕒 Last updated: {lastUpdated}</small>}
+
+              {/* Actions */}
               <div className="action-buttons">
                 <button onClick={copyToClipboard} className="copy-btn">
                   📋 Copy
@@ -182,8 +251,31 @@ export default function App() {
                   🔗 Share
                 </button>
               </div>
+
+              {/* Related Questions (uses existing blue pill buttons styles) */}
+              {relatedQuestions.length > 0 && (
+                <div className="suggestions" style={{ marginTop: "0.75rem" }}>
+                  <h3>Related questions:</h3>
+                  <div className="suggestion-buttons">
+                    {relatedQuestions.map((rq, idx) => (
+                      <button
+                        key={idx}
+                        className="suggestion-btn"
+                        disabled={loading}
+                        onClick={() => {
+                          setQuery(rq);
+                          fetchAnswer(rq);
+                        }}
+                      >
+                        {rq}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
+
           {error && <div className="error-msg">{error}</div>}
         </div>
       )}
