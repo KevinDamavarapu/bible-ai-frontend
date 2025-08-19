@@ -1,172 +1,171 @@
-import { useState } from "react";
-import toast, { Toaster } from "react-hot-toast";
+import React, { useState } from "react";
+import { Copy, Share2 } from "lucide-react";
+import { toast } from "sonner";
 
-function App() {
+export default function App() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
+  const [related, setRelated] = useState([]);
   const [history, setHistory] = useState([]);
-  const [relatedFromAnswer, setRelatedFromAnswer] = useState([]);
-  const [newSuggestions, setNewSuggestions] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // --- Improved topic extraction for natural follow-ups ---
+  const extractTopic = (q) => {
+    if (!q) return "this topic";
+
+    const cleaned = q
+      .replace(
+        /\b(tell me about|explain|what does|who is|who was|summarize|meaning of|define|describe)\b/gi,
+        ""
+      )
+      .trim();
+
+    const words = cleaned.split(/\s+/);
+    if (words.length > 6) {
+      return words.slice(-6).join(" ");
+    }
+    return cleaned || "this topic";
+  };
 
   const fetchAnswer = async (q) => {
-    if (!q) return;
+    if (!q.trim()) return;
     setLoading(true);
     setAnswer("");
-    setRelatedFromAnswer([]);
-    toast.loading("Thinking...", { id: "thinking" });
+    setRelated([]);
 
     try {
-      const res = await fetch("https://bible-ai-backend.onrender.com/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q }),
-      });
+      const res = await fetch(
+        `https://bible-ai-backend.onrender.com/ask?q=${encodeURIComponent(q)}`
+      );
       const data = await res.json();
 
       setAnswer(data.answer || "No answer found.");
-      setHistory((prev) => [{ q, a: data.answer }, ...prev]);
+      setHistory((prev) => [
+        { question: q, answer: data.answer },
+        ...prev.slice(0, 9),
+      ]);
 
-      // Generate related Qs from the topic of the question
       const topic = extractTopic(q);
-      setRelatedFromAnswer([
+      setRelated([
         `What key verses about ${topic} should I read next?`,
         `How does the Bible apply ${topic} to daily life?`,
         `Can you summarize ${topic} in one sentence?`,
       ]);
-
-      // Generate new suggestions for variety
-      setNewSuggestions([
-        "What are the Ten Commandments?",
-        "What does the Bible say about forgiveness?",
-        "Who were the disciples of Jesus?",
-      ]);
-
-      toast.dismiss("thinking");
-      toast.success("Answer ready!", { id: "answer-ready" });
     } catch (err) {
-      console.error(err);
-      toast.dismiss("thinking");
-      toast.error("Error fetching answer.");
+      setAnswer("Error fetching answer.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
-
-  const extractTopic = (q) => {
-    const words = q.split(" ");
-    if (words.length <= 3) return q;
-    return words.slice(-3).join(" ");
   };
 
   const handleAsk = () => {
-    fetchAnswer(question);
-    setQuestion("");
+    if (question.trim()) {
+      fetchAnswer(question);
+      setQuestion("");
+    }
   };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(answer);
-    toast.success("Copied to clipboard!");
+    toast.success("Answer copied to clipboard!");
   };
 
   const handleShare = () => {
-    const shareText = `${question}\n\n${answer}`;
-    navigator.clipboard.writeText(shareText);
-    toast.success("Answer + Question copied for sharing!");
+    const shareData = {
+      title: "Bible AI Answer",
+      text: answer,
+      url: window.location.href,
+    };
+    if (navigator.share) {
+      navigator.share(shareData).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(answer + " " + window.location.href);
+      toast.success("Answer copied for sharing!");
+    }
   };
 
   return (
-    <div className="min-h-screen bg-white text-black p-6 flex flex-col items-center">
-      <Toaster position="top-center" />
+    <div className="min-h-screen bg-white text-gray-900 p-6">
+      <div className="max-w-2xl mx-auto space-y-6">
+        <h1 className="text-3xl font-bold text-center">Bible AI</h1>
 
-      <h1 className="text-3xl font-bold mb-4">Bible AI</h1>
-
-      <div className="flex w-full max-w-xl space-x-2 mb-4">
-        <input
-          type="text"
-          className="flex-1 border border-gray-400 rounded p-2"
-          value={question}
-          placeholder="Ask me a question"
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleAsk()}
-        />
-        <button
-          className="bg-black text-white px-4 py-2 rounded disabled:opacity-50"
-          onClick={handleAsk}
-          disabled={loading}
-        >
-          {loading ? "Thinking..." : "Ask"}
-        </button>
-      </div>
-
-      {answer && (
-        <div className="w-full max-w-xl border border-gray-400 rounded p-4 mb-4">
-          <p className="mb-2">{answer}</p>
-          <div className="flex space-x-2 mt-2">
-            <button
-              onClick={handleCopy}
-              className="bg-black text-white px-3 py-1 rounded"
-            >
-              Copy
-            </button>
-            <button
-              onClick={handleShare}
-              className="bg-black text-white px-3 py-1 rounded"
-            >
-              Share
-            </button>
-          </div>
+        {/* Ask Box */}
+        <div className="flex space-x-2">
+          <input
+            type="text"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAsk()}
+            placeholder="Ask me a question..."
+            className="flex-1 p-2 border rounded-lg"
+          />
+          <button
+            onClick={handleAsk}
+            className="px-4 py-2 bg-black text-white rounded-lg"
+            disabled={loading}
+          >
+            {loading ? "Asking..." : "Ask"}
+          </button>
         </div>
-      )}
 
-      {/* Related Questions based on the Answer */}
-      {relatedFromAnswer.length > 0 && (
-        <div className="w-full max-w-xl border border-gray-400 rounded p-4 mb-4">
-          <h2 className="font-semibold mb-2">Related Questions:</h2>
-          {relatedFromAnswer.map((rq, idx) => (
-            <p
-              key={idx}
-              className="cursor-pointer text-blue-600 hover:underline"
-              onClick={() => fetchAnswer(rq)}
-            >
-              {rq}
-            </p>
-          ))}
-        </div>
-      )}
-
-      {/* New Suggestions Block */}
-      {newSuggestions.length > 0 && (
-        <div className="w-full max-w-xl border border-gray-400 rounded p-4">
-          <h2 className="font-semibold mb-2">Try one of these:</h2>
-          {newSuggestions.map((sq, idx) => (
-            <p
-              key={idx}
-              className="cursor-pointer text-blue-600 hover:underline"
-              onClick={() => fetchAnswer(sq)}
-            >
-              {sq}
-            </p>
-          ))}
-        </div>
-      )}
-
-      {/* History Section */}
-      {history.length > 0 && (
-        <div className="w-full max-w-xl mt-6">
-          <h2 className="font-semibold mb-2">History:</h2>
-          {history.map((item, idx) => (
-            <div
-              key={idx}
-              className="border border-gray-400 rounded p-2 mb-2 bg-black text-white"
-            >
-              <p className="font-bold">Q: {item.q}</p>
-              <p>A: {item.a}</p>
+        {/* Answer Box */}
+        {answer && (
+          <div className="p-4 border rounded-lg bg-gray-50 space-y-3">
+            <p>{answer}</p>
+            <div className="flex space-x-4">
+              <button
+                onClick={handleCopy}
+                className="flex items-center space-x-1 text-sm text-gray-700"
+              >
+                <Copy size={16} /> <span>Copy</span>
+              </button>
+              <button
+                onClick={handleShare}
+                className="flex items-center space-x-1 text-sm text-gray-700"
+              >
+                <Share2 size={16} /> <span>Share</span>
+              </button>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        )}
+
+        {/* Related Questions */}
+        {related.length > 0 && (
+          <div className="p-3 border rounded-lg bg-black text-white space-y-2">
+            <h2 className="font-semibold">Related Questions</h2>
+            {related.map((r, i) => (
+              <button
+                key={i}
+                onClick={() => fetchAnswer(r)}
+                className="block text-left w-full hover:underline"
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Toggle History */}
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          className="px-4 py-2 border rounded-lg text-sm"
+        >
+          {showHistory ? "Hide History" : "Show History"}
+        </button>
+
+        {/* History */}
+        {showHistory && (
+          <div className="space-y-3">
+            {history.map((h, i) => (
+              <div key={i} className="p-3 border rounded-lg bg-black text-white">
+                <p className="font-semibold">Q: {h.question}</p>
+                <p>A: {h.answer}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-
-export default App;
