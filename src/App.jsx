@@ -1,161 +1,156 @@
-import React, { useState, useEffect } from "react";
-import { Copy, Share2 } from "lucide-react";
-import { toast } from "sonner";
+import { useState } from "react";
+import { Toaster, toast } from "sonner";
+import { motion } from "framer-motion";
+import { Share2, Copy, History } from "lucide-react";
 
 export default function App() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
-  const [relatedQuestions, setRelatedQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [relatedQuestions, setRelatedQuestions] = useState([]);
   const [history, setHistory] = useState([]);
-  const [retryMessage, setRetryMessage] = useState("");
-  const [lastAsked, setLastAsked] = useState(null);
 
-  // ✅ Extract main topic from question
-  const extractTopic = (question) => {
-    const words = question.replace(/[?.!,]/g, "").split(" ");
-    return words.slice(-1)[0]; // last word, cleaned
+  // 🔹 Helper: Extract meaningful part of the question
+  const extractTopic = (q) => {
+    if (!q) return "";
+    const words = q.split(" ");
+    if (words.length <= 3) return q;
+    return words.slice(2).join(" ");
   };
 
-  // ✅ Generate related questions
-  const generateRelatedQuestions = (topic) => [
-    `What key verses about ${topic} should I read next?`,
-    `How does the Bible apply ${topic} to daily life?`,
-    `Can you summarize ${topic} in one sentence?`,
-  ];
-
-  const fetchAnswer = async (q) => {
+  const handleAsk = async (q) => {
+    if (!q) return;
     setLoading(true);
-    setRetryMessage("");
+    setAnswer("");
+    setRelatedQuestions([]);
+
     try {
       const res = await fetch(
         `https://bible-ai-backend.onrender.com/ask?q=${encodeURIComponent(q)}`
       );
-
-      if (res.status === 503) {
-        setRetryMessage("Backend is waking up, please wait a few seconds...");
-        toast("⏳ Backend waking up...");
-        setTimeout(() => fetchAnswer(q), 5000);
-        return;
-      }
-
       const data = await res.json();
-      setAnswer(data.answer);
 
-      // ✅ Save to history
-      setHistory((prev) => [
-        { question: q, answer: data.answer },
-        ...prev,
-      ]);
-
-      // ✅ Generate related questions
-      const topic = extractTopic(q);
-      setRelatedQuestions(generateRelatedQuestions(topic));
-
-      setLastAsked(new Date().toLocaleTimeString());
+      if (data.answer) {
+        setAnswer(data.answer);
+        setHistory((prev) => [{ q, a: data.answer }, ...prev]);
+      }
+      if (data.related_questions) {
+        setRelatedQuestions(data.related_questions);
+      }
     } catch (err) {
-      console.error(err);
-      toast("⚠️ Error fetching answer");
+      toast.error("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAsk = () => {
-    if (question.trim() !== "") {
-      fetchAnswer(question);
-      setQuestion("");
-    }
+  const handleQuestionClick = (q) => {
+    setQuestion(q);
+    handleAsk(q);
   };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(answer);
-    toast("📋 Answer copied!");
+    toast.success("Copied to clipboard!");
   };
 
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
-    toast("🔗 Link copied!");
+  const handleShare = async () => {
+    try {
+      await navigator.share({
+        title: "Bible AI",
+        text: answer,
+        url: window.location.href,
+      });
+    } catch {
+      toast.error("Sharing not supported");
+    }
   };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 p-6 flex flex-col items-center">
-      <h1 className="text-3xl font-bold mb-4">Bible AI</h1>
+    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col items-center p-6">
+      <Toaster richColors position="top-center" />
+
+      <motion.h1
+        className="text-4xl font-bold mb-6 text-blue-400"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        Bible AI
+      </motion.h1>
 
       {/* Input */}
-      <div className="flex space-x-2 w-full max-w-xl">
+      <div className="flex gap-2 w-full max-w-xl mb-6">
         <input
           type="text"
-          placeholder="Ask a question..."
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          className="flex-grow border p-2 rounded-xl"
-          onKeyDown={(e) => e.key === "Enter" && handleAsk()}
+          onKeyDown={(e) => e.key === "Enter" && handleAsk(question)}
+          placeholder="Ask a Bible question..."
+          className="flex-1 px-4 py-2 rounded-xl bg-gray-900 border border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
         />
         <button
-          onClick={handleAsk}
+          onClick={() => handleAsk(question)}
           disabled={loading}
-          className="bg-blue-500 text-white px-4 py-2 rounded-xl"
+          className="px-4 py-2 bg-blue-500 rounded-xl hover:bg-blue-600 disabled:opacity-50"
         >
-          {loading ? "Loading..." : "Ask"}
+          Ask
         </button>
       </div>
 
-      {/* Retry message */}
-      {retryMessage && (
-        <p className="mt-2 text-yellow-600">{retryMessage}</p>
-      )}
-
       {/* Answer */}
-      {answer && (
-        <div className="mt-6 p-4 border rounded-xl w-full max-w-xl shadow">
-          <div className="flex justify-between items-center">
-            <h2 className="font-semibold">Answer</h2>
-            <div className="flex space-x-2">
-              <button onClick={handleCopy}>
-                <Copy size={18} />
+      <motion.div
+        className="w-full max-w-xl p-4 bg-gray-900 rounded-2xl shadow-lg mb-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        {loading ? (
+          <p className="text-gray-400">Thinking...</p>
+        ) : answer ? (
+          <div>
+            <p className="mb-3 whitespace-pre-line">{answer}</p>
+            <div className="flex gap-4">
+              <button onClick={handleCopy} className="flex items-center gap-1 text-sm hover:text-blue-400">
+                <Copy size={16} /> Copy
               </button>
-              <button onClick={handleShare}>
-                <Share2 size={18} />
+              <button onClick={handleShare} className="flex items-center gap-1 text-sm hover:text-blue-400">
+                <Share2 size={16} /> Share
               </button>
             </div>
           </div>
-          <p className="mt-2 whitespace-pre-line">{answer}</p>
-          {lastAsked && (
-            <p className="text-xs text-gray-500 mt-2">
-              Asked at {lastAsked}
-            </p>
-          )}
-        </div>
-      )}
+        ) : (
+          <p className="text-gray-500">Ask a question to see the answer.</p>
+        )}
+      </motion.div>
 
       {/* Related Questions */}
       {relatedQuestions.length > 0 && (
-        <div className="mt-4 w-full max-w-xl">
-          <h3 className="font-semibold">Related Questions</h3>
-          <ul className="list-disc list-inside text-blue-600">
-            {relatedQuestions.map((rq, i) => (
-              <li
-                key={i}
-                onClick={() => fetchAnswer(rq)}
-                className="cursor-pointer hover:underline"
+        <div className="w-full max-w-xl bg-gray-900 p-4 rounded-2xl shadow-lg">
+          <h3 className="text-lg font-semibold mb-2 text-blue-400">Try one of these:</h3>
+          <div className="space-y-2">
+            {relatedQuestions.map((rq, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleQuestionClick(rq)}
+                className="text-blue-400 hover:underline text-left block"
               >
-                {rq}
-              </li>
+                {extractTopic(rq)}
+              </button>
             ))}
-          </ul>
+          </div>
         </div>
       )}
 
       {/* History */}
       {history.length > 0 && (
-        <div className="mt-6 w-full max-w-xl">
-          <h3 className="font-semibold">History</h3>
-          <ul className="space-y-2">
+        <div className="w-full max-w-xl mt-6 bg-gray-900 p-4 rounded-2xl shadow-lg">
+          <h3 className="flex items-center gap-2 text-lg font-semibold mb-2 text-green-400">
+            <History size={18} /> History
+          </h3>
+          <ul className="space-y-2 max-h-48 overflow-y-auto">
             {history.map((h, i) => (
-              <li key={i} className="border p-2 rounded-xl">
-                <p className="font-medium">Q: {h.question}</p>
-                <p className="text-sm">A: {h.answer}</p>
+              <li key={i} className="p-2 bg-gray-800 rounded-lg">
+                <p className="font-medium">{h.q}</p>
+                <p className="text-sm text-gray-300">{h.a}</p>
               </li>
             ))}
           </ul>
