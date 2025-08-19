@@ -1,154 +1,116 @@
 import { useState } from "react";
 import toast, { Toaster } from "react-hot-toast";
 
-export default function App() {
+function App() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
-  const [relatedQuestions, setRelatedQuestions] = useState([]);
+  const [relatedFromAnswer, setRelatedFromAnswer] = useState([]);
+  const [newSuggestions, setNewSuggestions] = useState([]);
 
-  // --- Function to extract main topic from query ---
-  const extractTopic = (query) => {
-    if (!query) return "";
-
-    // Lowercase for easier matching
-    let q = query.toLowerCase();
-
-    // Remove common prefixes
-    const prefixes = [
-      "what is",
-      "what are",
-      "who is",
-      "who was",
-      "tell me about",
-      "explain",
-      "define",
-      "describe",
-      "give me",
-      "summarize",
-      "how does",
-      "how do",
-      "can you",
-      "could you",
-    ];
-
-    for (let prefix of prefixes) {
-      if (q.startsWith(prefix)) {
-        q = q.replace(prefix, "").trim();
-        break;
-      }
-    }
-
-    // Remove trailing question mark if present
-    q = q.replace(/\?$/, "").trim();
-
-    // Capitalize properly for display
-    return q.charAt(0).toUpperCase() + q.slice(1);
-  };
-
-  const fetchAnswer = async () => {
-    if (!question.trim()) {
-      toast.error("Please enter a question");
-      return;
-    }
-
+  const fetchAnswer = async (q) => {
+    if (!q) return;
     setLoading(true);
     setAnswer("");
-    toast.loading("Thinking...");
+    setRelatedFromAnswer([]);
+    toast.loading("Thinking...", { id: "thinking" });
 
     try {
-      const response = await fetch("https://bible-ai-backend.onrender.com/ask", {
+      const res = await fetch("https://bible-ai-backend.onrender.com/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question: q }),
       });
+      const data = await res.json();
 
-      const data = await response.json();
-      setAnswer(data.answer);
+      setAnswer(data.answer || "No answer found.");
+      setHistory((prev) => [{ q, a: data.answer }, ...prev]);
 
-      // Save history
-      setHistory((prev) => [
-        { q: question, a: data.answer },
-        ...prev.slice(0, 4),
-      ]);
-
-      // --- Generate related questions using extracted topic ---
-      const topic = extractTopic(question);
-      setRelatedQuestions([
+      // Generate related Qs from the topic of the question
+      const topic = extractTopic(q);
+      setRelatedFromAnswer([
         `What key verses about ${topic} should I read next?`,
         `How does the Bible apply ${topic} to daily life?`,
         `Can you summarize ${topic} in one sentence?`,
       ]);
 
-      toast.dismiss();
-      toast.success("Answer ready!");
-    } catch (error) {
-      toast.dismiss();
-      toast.error("Error fetching answer");
-    } finally {
-      setLoading(false);
+      // Generate new suggestions for variety
+      setNewSuggestions([
+        "What are the Ten Commandments?",
+        "What does the Bible say about forgiveness?",
+        "Who were the disciples of Jesus?",
+      ]);
+
+      toast.dismiss("thinking");
+      toast.success("Answer ready!", { id: "answer-ready" });
+    } catch (err) {
+      console.error(err);
+      toast.dismiss("thinking");
+      toast.error("Error fetching answer.");
     }
+    setLoading(false);
   };
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
+  const extractTopic = (q) => {
+    const words = q.split(" ");
+    if (words.length <= 3) return q;
+    return words.slice(-3).join(" ");
+  };
+
+  const handleAsk = () => {
+    fetchAnswer(question);
+    setQuestion("");
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(answer);
     toast.success("Copied to clipboard!");
   };
 
-  const shareAnswer = async (q, a) => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: "Bible AI Answer",
-          text: `Q: ${q}\n\nA: ${a}`,
-        });
-        toast.success("Shared successfully!");
-      } catch {
-        toast.error("Error sharing");
-      }
-    } else {
-      copyToClipboard(`Q: ${q}\n\nA: ${a}`);
-    }
+  const handleShare = () => {
+    const shareText = `${question}\n\n${answer}`;
+    navigator.clipboard.writeText(shareText);
+    toast.success("Answer + Question copied for sharing!");
   };
 
   return (
-    <div className="min-h-screen bg-white text-black p-6">
+    <div className="min-h-screen bg-white text-black p-6 flex flex-col items-center">
       <Toaster position="top-center" />
-      <h1 className="text-2xl font-bold mb-4">Bible AI</h1>
 
-      <div className="mb-4">
+      <h1 className="text-3xl font-bold mb-4">Bible AI</h1>
+
+      <div className="flex w-full max-w-xl space-x-2 mb-4">
         <input
           type="text"
+          className="flex-1 border border-gray-400 rounded p-2"
           value={question}
+          placeholder="Ask me a question"
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Ask me a question..."
-          className="border p-2 w-full"
+          onKeyDown={(e) => e.key === "Enter" && handleAsk()}
         />
         <button
-          onClick={fetchAnswer}
+          className="bg-black text-white px-4 py-2 rounded disabled:opacity-50"
+          onClick={handleAsk}
           disabled={loading}
-          className="mt-2 bg-black text-white px-4 py-2"
         >
           {loading ? "Thinking..." : "Ask"}
         </button>
       </div>
 
       {answer && (
-        <div className="mb-6 p-4 bg-black text-white rounded-lg">
-          <h2 className="font-semibold mb-2">Answer:</h2>
-          <p className="mb-3">{answer}</p>
-
-          <div className="flex space-x-3">
+        <div className="w-full max-w-xl border border-gray-400 rounded p-4 mb-4">
+          <p className="mb-2">{answer}</p>
+          <div className="flex space-x-2 mt-2">
             <button
-              onClick={() => copyToClipboard(answer)}
-              className="bg-gray-700 px-3 py-1 rounded"
+              onClick={handleCopy}
+              className="bg-black text-white px-3 py-1 rounded"
             >
               Copy
             </button>
             <button
-              onClick={() => shareAnswer(question, answer)}
-              className="bg-gray-700 px-3 py-1 rounded"
+              onClick={handleShare}
+              className="bg-black text-white px-3 py-1 rounded"
             >
               Share
             </button>
@@ -156,31 +118,55 @@ export default function App() {
         </div>
       )}
 
-      {relatedQuestions.length > 0 && (
-        <div className="mb-6 p-4 bg-black text-white rounded-lg">
+      {/* Related Questions based on the Answer */}
+      {relatedFromAnswer.length > 0 && (
+        <div className="w-full max-w-xl border border-gray-400 rounded p-4 mb-4">
           <h2 className="font-semibold mb-2">Related Questions:</h2>
-          <ul className="list-disc list-inside space-y-1">
-            {relatedQuestions.map((rq, idx) => (
-              <li key={idx}>{rq}</li>
-            ))}
-          </ul>
+          {relatedFromAnswer.map((rq, idx) => (
+            <p
+              key={idx}
+              className="cursor-pointer text-blue-600 hover:underline"
+              onClick={() => fetchAnswer(rq)}
+            >
+              {rq}
+            </p>
+          ))}
         </div>
       )}
 
+      {/* New Suggestions Block */}
+      {newSuggestions.length > 0 && (
+        <div className="w-full max-w-xl border border-gray-400 rounded p-4">
+          <h2 className="font-semibold mb-2">Try one of these:</h2>
+          {newSuggestions.map((sq, idx) => (
+            <p
+              key={idx}
+              className="cursor-pointer text-blue-600 hover:underline"
+              onClick={() => fetchAnswer(sq)}
+            >
+              {sq}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {/* History Section */}
       {history.length > 0 && (
-        <div className="p-4 bg-black text-white rounded-lg">
-          <h2 className="font-semibold mb-2">Recent Questions:</h2>
-          <ul className="list-disc list-inside space-y-1">
-            {history.map((h, idx) => (
-              <li key={idx}>
-                <strong>Q:</strong> {h.q}
-                <br />
-                <strong>A:</strong> {h.a}
-              </li>
-            ))}
-          </ul>
+        <div className="w-full max-w-xl mt-6">
+          <h2 className="font-semibold mb-2">History:</h2>
+          {history.map((item, idx) => (
+            <div
+              key={idx}
+              className="border border-gray-400 rounded p-2 mb-2 bg-black text-white"
+            >
+              <p className="font-bold">Q: {item.q}</p>
+              <p>A: {item.a}</p>
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 }
+
+export default App;
