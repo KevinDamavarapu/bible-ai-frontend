@@ -1,315 +1,201 @@
-import React, { useRef, useState } from "react";
-import axios from "axios";
-import { Toaster, toast } from "react-hot-toast";
-import "./App.css";
-
-const API_BASE =
-  import.meta.env.VITE_API_URL || "https://bible-ai-wmlk.onrender.com";
-const API_URL = `${API_BASE}/bible`;
+import React, { useState } from "react";
+import { Copy, Share2, Loader2 } from "lucide-react";
 
 export default function App() {
-  const [query, setQuery] = useState("");
+  const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
+  const [related, setRelated] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [retryCount, setRetryCount] = useState(0);
-  const [lastUpdated, setLastUpdated] = useState("");
   const [history, setHistory] = useState([]);
-  const [relatedQuestions, setRelatedQuestions] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
+  const [backendWaking, setBackendWaking] = useState(false);
 
-  const answerRef = useRef(null);
-
-  const suggestions = [
-    "What are the fruits of the Spirit?",
-    "Tell me about love in Song of Solomon",
-    "Who was Moses?",
-    "Explain the parable of the prodigal son",
-    "What does the Bible say about forgiveness?",
-    "Summarize the story of David and Goliath",
-    "What is the Great Commission?",
-    "Who were the 12 disciples?",
-    "What is the meaning of faith in Hebrews 11?",
-    "Explain the Ten Commandments",
-  ];
-
-  // --- Formatting helpers (no layout/color change) ---
-  const verseRegex = /\b(?:[1-3]?\s?[A-Z][a-z]+)\s\d{1,3}:\d{1,3}(?:[-–]\d{1,3})?\b/g;
-  const boldTerms =
-    /\b(God|Jesus|Christ|Holy\sSpirit|Spirit|faith|grace|love|hope|salvation|forgiveness)\b/gi;
-
-  const escapeHtml = (s) =>
-    s
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-
-  const formatAnswerHtml = (text) => {
-    if (!text) return "";
-    const safe = escapeHtml(text.trim());
-
-    // Split paragraphs by 2+ newlines
-    const paragraphs = safe.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
-
-    return paragraphs
-      .map((p) => {
-        // handle bullet points inside paragraph
-        if (/^[-•]\s/m.test(p)) {
-          const items = p
-            .split(/\n/)
-            .filter((line) => /^[-•]\s/.test(line))
-            .map(
-              (line) =>
-                "<li>" +
-                line
-                  .replace(/^[-•]\s*/, "")
-                  .replace(verseRegex, "<em>$&</em>")
-                  .replace(boldTerms, "<strong>$&</strong>") +
-                "</li>"
-            )
-            .join("");
-          return `<ul>${items}</ul>`;
-        }
-
-        // normal paragraph
-        let phtml = p
-          .replace(verseRegex, "<em>$&</em>")
-          .replace(boldTerms, "<strong>$&</strong>")
-          .replace(/\n/g, "<br/>");
-        return `<p>${phtml}</p>`;
-      })
-      .join("");
-  };
-
-  // --- Mini NLP topic extractor ---
-  const extractTopics = (q, a) => {
-    const text = (q + " " + (a || "")).toLowerCase();
-
-    // candidate keywords (filter out common stopwords)
-    const tokens = text.match(/\b[a-z]{3,}\b/g) || [];
-    const stopwords = new Set([
-      "what", "does", "the", "and", "for", "about", "with", "from", "that",
-      "this", "who", "was", "are", "say", "tell", "story", "explain", "give",
-      "into", "how", "can", "you", "next", "one", "sentence"
-    ]);
-
-    const freq = {};
-    for (const t of tokens) {
-      if (!stopwords.has(t)) {
-        freq[t] = (freq[t] || 0) + 1;
+  const formatBibleReferences = (text) => {
+    // Regex to detect references like John 3:16 or 1 Corinthians 13:4-7
+    const bibleRegex = /\b([1-3]?\s?[A-Za-z]+)\s+(\d+):(\d+(-\d+)?)/g;
+    return text.split(bibleRegex).map((part, i, arr) => {
+      if (i % 4 === 1) {
+        const book = arr[i];
+        const chapter = arr[i + 1];
+        const verse = arr[i + 2];
+        const ref = `${book} ${chapter}:${verse}`;
+        const urlBook = book.replace(/\s+/g, "");
+        const url = `https://www.bible.com/bible/1/${urlBook}.${chapter}.${verse}`;
+        return (
+          <a
+            key={i}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 underline"
+          >
+            {ref}
+          </a>
+        );
       }
-    }
-
-    // pick top 2 frequent words as "topics"
-    const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]);
-    return sorted.slice(0, 2).map(([word]) => word);
+      return part;
+    });
   };
 
-  const generateRelatedQuestions = (q, a) => {
-    const topics = extractTopics(q, a);
-
-    if (topics.length > 0) {
-      return [
-        `What key verses about ${topics.join(" and ")} should I read next?`,
-        `How does the Bible apply ${topics[0]} to daily life?`,
-        `Can you summarize ${topics.join(" and ")} in one sentence?`,
-      ];
-    }
-
-    // fallback
-    return [
-      "What related verses support this?",
-      "How can I apply this teaching today?",
-      "Summarize this in one sentence.",
-    ];
+  const extractTopic = (q) => {
+    // Remove stopwords, keep key context words
+    const stopwords = ["what", "is", "the", "of", "in", "a", "an", "to", "and", "about"];
+    return q
+      .split(" ")
+      .filter((word) => !stopwords.includes(word.toLowerCase()))
+      .slice(0, 5)
+      .join(" ");
   };
 
-  const fetchAnswer = async (customQuery = query) => {
-    if (!customQuery.trim() || loading) return;
+  const handleAsk = async (customQuestion) => {
+    const q = customQuestion || question;
+    if (!q.trim()) return;
 
     setLoading(true);
     setAnswer("");
-    setError("");
-    setLastUpdated("");
-    setRelatedQuestions([]);
+    setRelated([]);
+    setCopied(false);
+    setShared(false);
 
-    toast.loading("Thinking…", { id: "status" });
+    // show backend waking toast if it takes time
+    const wakingTimer = setTimeout(() => {
+      setBackendWaking(true);
+    }, 2000);
 
     try {
-      const res = await axios.post(API_URL, null, {
-        params: { query: customQuery },
-        timeout: 20000,
+      const res = await fetch("https://bible-ai-backend.vercel.app/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q }),
       });
 
-      if (res.data?.error) throw new Error(res.data.error);
+      clearTimeout(wakingTimer);
+      setBackendWaking(false);
 
-      const text = res.data?.answer || "No answer returned.";
-      setAnswer(text);
-      setLastUpdated(new Date().toLocaleTimeString());
-      setRetryCount(0);
+      const data = await res.json();
+      setAnswer(data.answer || "No answer found.");
+
+      const topic = extractTopic(q);
+      setRelated([
+        `What key verses about ${topic} should I read next?`,
+        `How does the Bible apply ${topic} to daily life?`,
+        `Can you summarize ${topic} in one sentence?`,
+      ]);
+
+      setHistory([{ q, a: data.answer }, ...history]);
+      setQuestion("");
+    } catch (error) {
+      clearTimeout(wakingTimer);
+      setBackendWaking(false);
+      setAnswer("Error fetching answer. Please try again.");
+    } finally {
       setLoading(false);
-
-      // update history (keep last 5 unique)
-      setHistory((prev) => {
-        const newHistory = [customQuery, ...prev.filter((q) => q !== customQuery)];
-        return newHistory.slice(0, 5);
-      });
-
-      // generate related questions based on query/answer
-      setRelatedQuestions(generateRelatedQuestions(customQuery, text));
-
-      toast.success("Answer ready", { id: "status" });
-
-      requestAnimationFrame(() => {
-        answerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    } catch (err) {
-      if (retryCount < 3) {
-        const next = retryCount + 1;
-        setRetryCount(next);
-        toast.loading(`Waking backend… retry ${next}/3`, { id: "status" });
-        setTimeout(() => fetchAnswer(customQuery), 3000);
-      } else {
-        setError("⚠️ Failed to fetch answer. Please try again.");
-        setLoading(false);
-        setRetryCount(0);
-        toast.error("Failed to fetch answer. Please try again.", { id: "status" });
-      }
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    fetchAnswer();
+  const handleCopy = () => {
+    navigator.clipboard.writeText(answer);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const copyToClipboard = () => {
-    if (answer) {
-      navigator.clipboard.writeText(answer);
-      toast.success("Copied to clipboard");
-    }
-  };
-
-  const shareAnswer = async () => {
+  const handleShare = () => {
     if (navigator.share) {
-      try {
-        await navigator.share({ title: "Bible AI", text: answer });
-      } catch {
-        toast.error("Sharing cancelled");
-      }
+      navigator.share({ title: "Bible AI", text: answer });
+      setShared(true);
+      setTimeout(() => setShared(false), 2000);
     } else {
-      copyToClipboard();
+      alert("Sharing not supported on this browser.");
     }
   };
 
   return (
-    <div className="app-container">
-      <Toaster position="top-center" />
+    <div className="min-h-screen bg-white text-black p-6">
+      <h1 className="text-3xl font-bold mb-6 text-center">Bible AI</h1>
 
-      <h1 className="title">📖 Bible AI</h1>
-      <p className="subtitle">Ask anything about the Bible</p>
-
-      <form className="input-section" onSubmit={handleSubmit}>
+      <div className="flex justify-center mb-6">
         <input
           type="text"
-          placeholder="Type your question here..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="query-input"
-          disabled={loading}
-          aria-busy={loading}
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          onKeyPress={(e) => e.key === "Enter" && handleAsk()}
+          placeholder="Ask me a question..."
+          className="border border-gray-400 rounded-l px-4 py-2 w-2/3"
         />
-        <button type="submit" disabled={loading} className="ask-button">
-          {loading ? "Thinking…" : "Ask"}
+        <button
+          onClick={() => handleAsk()}
+          disabled={loading}
+          className="bg-black text-white px-4 py-2 rounded-r"
+        >
+          {loading ? <Loader2 className="animate-spin" size={20} /> : "Ask"}
         </button>
-      </form>
-
-      <div className="suggestions">
-        <h3>Try one of these:</h3>
-        <div className="suggestion-buttons">
-          {suggestions.map((s, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                setQuery(s);
-                fetchAnswer(s);
-              }}
-              className="suggestion-btn"
-              disabled={loading}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
       </div>
 
-      {history.length > 0 && (
-        <div className="history-box">
-          <h3>Recent Questions:</h3>
-          <ul>
-            {history.map((h, i) => (
-              <li key={i}>
-                <button
-                  className="history-btn"
-                  onClick={() => {
-                    setQuery(h);
-                    fetchAnswer(h);
-                  }}
-                  disabled={loading}
-                >
-                  {h}
-                </button>
+      {backendWaking && (
+        <p className="text-center text-gray-600 mb-4">
+          ⏳ Waking up the backend, please wait...
+        </p>
+      )}
+
+      {answer && (
+        <div className="border border-gray-400 p-4 rounded mb-4 bg-black text-white">
+          <p className="mb-4">{formatBibleReferences(answer)}</p>
+          <div className="flex gap-4">
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-2 bg-gray-700 px-3 py-1 rounded"
+            >
+              <Copy size={16} />
+              {copied ? "Copied!" : "Copy"}
+            </button>
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-2 bg-gray-700 px-3 py-1 rounded"
+            >
+              <Share2 size={16} />
+              {shared ? "Shared!" : "Share"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {related.length > 0 && (
+        <div className="border border-gray-400 p-4 rounded mb-4 bg-black text-white">
+          <h2 className="font-semibold mb-2">Try one of these:</h2>
+          <ul className="list-disc list-inside">
+            {related.map((r, i) => (
+              <li
+                key={i}
+                className="cursor-pointer hover:underline"
+                onClick={() => handleAsk(r)}
+              >
+                {r}
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {(answer || error) && (
-        <div ref={answerRef} className="answer-box">
-          {answer && (
-            <>
-              <strong>Answer:</strong>
-              <div
-                className="formatted-answer"
-                dangerouslySetInnerHTML={{ __html: formatAnswerHtml(answer) }}
-              />
-              {lastUpdated && <small>🕒 Last updated: {lastUpdated}</small>}
+      <button
+        onClick={() => setShowHistory(!showHistory)}
+        className="mb-4 underline"
+      >
+        {showHistory ? "Hide History" : "Show History"}
+      </button>
 
-              <div className="action-buttons">
-                <button onClick={copyToClipboard} className="copy-btn">
-                  📋 Copy
-                </button>
-                <button onClick={shareAnswer} className="share-btn">
-                  🔗 Share
-                </button>
-              </div>
-
-              {relatedQuestions.length > 0 && (
-                <div className="suggestions" style={{ marginTop: "0.75rem" }}>
-                  <h3>Related questions:</h3>
-                  <div className="suggestion-buttons">
-                    {relatedQuestions.map((rq, idx) => (
-                      <button
-                        key={idx}
-                        className="suggestion-btn"
-                        disabled={loading}
-                        onClick={() => {
-                          setQuery(rq);
-                          fetchAnswer(rq);
-                        }}
-                      >
-                        {rq}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {error && <div className="error-msg">{error}</div>}
+      {showHistory && (
+        <div className="space-y-4">
+          {history.map((h, i) => (
+            <div
+              key={i}
+              className="border border-gray-400 p-4 rounded bg-black text-white"
+            >
+              <p className="font-semibold">Q: {h.q}</p>
+              <p className="mt-2">{formatBibleReferences(h.a)}</p>
+            </div>
+          ))}
         </div>
       )}
     </div>
