@@ -1,162 +1,147 @@
-import { useState } from "react";
-import "./App.css";
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Copy, Share2 } from "lucide-react";
 
-function App() {
+// Regex to detect Bible references like "John 3:16"
+const referenceRegex = /\b([1-3]?\s?[A-Za-z]+)\s(\d{1,3}):(\d{1,3})(?:-(\d{1,3}))?\b/g;
+
+// Function to wrap references with clickable Bible.com NIV links
+function highlightReferences(text) {
+  return text.split("\n").map((line, idx) => {
+    const parts = [];
+    let lastIndex = 0;
+
+    line.replace(referenceRegex, (match, book, chapter, verse, endVerse, offset) => {
+      if (offset > lastIndex) {
+        parts.push(line.substring(lastIndex, offset));
+      }
+      const ref = `${book} ${chapter}:${verse}${endVerse ? "-" + endVerse : ""}`;
+      const url = `https://www.bible.com/bible/111/${book.replace(/\s+/g, "").toUpperCase()}.${chapter}.${verse}.NIV`;
+      parts.push(
+        <a
+          key={offset}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 underline hover:text-blue-700"
+        >
+          {ref}
+        </a>
+      );
+      lastIndex = offset + match.length;
+      return match;
+    });
+
+    if (lastIndex < line.length) {
+      parts.push(line.substring(lastIndex));
+    }
+
+    return <p key={idx}>{parts}</p>;
+  });
+}
+
+export default function App() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [related, setRelated] = useState([]);
-  const [suggested, setSuggested] = useState([]);
-  const [recent, setRecent] = useState([]);
-
-  // --- Format answer: bold + Bible links ---
-  const formatAnswer = (text) => {
-    if (!text) return "";
-
-    return text
-      // Bold formatting
-      .replace(/\*(.*?)\*/g, "<strong>$1</strong>")
-      // Bible references
-      .replace(/\b([1-3]?\s?[A-Za-z]+\s\d+:\d+(-\d+)?)/g, (match) => {
-        const encoded = match.replace(/\s+/g, "%20");
-        return `<a href="https://www.bible.com/bible/111/${encoded}.NIV" target="_blank" class="text-blue-600 underline">${match}</a>`;
-      });
-  };
+  const [relatedQuestions, setRelatedQuestions] = useState([]);
+  const [recentQuestions, setRecentQuestions] = useState([]);
 
   const handleAsk = async () => {
     if (!question.trim()) return;
-    setLoading(true);
-    setAnswer("");
-    setRelated([]);
-    setSuggested([]);
 
+    setAnswer("⏳ Fetching answer...");
     try {
-      const res = await fetch("https://your-backend.vercel.app/api/ask", {
+      const res = await fetch("http://localhost:5000/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question }),
       });
-
       const data = await res.json();
-      setAnswer(data.answer || "No answer found.");
-      setRelated(data.relatedQuestions || []);
-      setSuggested(data.suggestedQuestions || []);
-      setRecent((prev) => [question, ...prev.slice(0, 4)]);
-    } catch (err) {
-      setAnswer("⚠️ Error fetching answer. Please try again.");
-    }
-    setLoading(false);
-  };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(answer);
-    alert("Answer copied!");
+      setAnswer(data.answer || "No answer found.");
+      setRelatedQuestions(data.related_questions || []);
+      setRecentQuestions((prev) => [question, ...prev.slice(0, 4)]);
+    } catch (err) {
+      setAnswer("⚠️ Error fetching answer.");
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6 text-center text-gray-800">
-          Bible AI Assistant
+    <div className="min-h-screen bg-gradient-to-b from-purple-100 to-white p-6">
+      <motion.div
+        className="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl p-6"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <h1 className="text-3xl font-bold text-purple-700 mb-4">
+          📖 Bible AI (NIV)
         </h1>
-
-        {/* Input */}
-        <div className="flex mb-6 shadow-sm">
+        <div className="flex gap-2 mb-4">
           <input
+            type="text"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            className="flex-1 border border-gray-300 rounded-l-lg p-3 focus:outline-none"
             placeholder="Ask a Bible question..."
+            className="flex-grow border rounded-lg px-4 py-2"
           />
-          <button
-            onClick={handleAsk}
-            className="bg-blue-600 text-white px-5 rounded-r-lg hover:bg-blue-700"
-            disabled={loading}
-          >
-            {loading ? "Loading..." : "Ask"}
-          </button>
+          <Button onClick={handleAsk}>Ask</Button>
         </div>
 
-        {/* Main Answer Card */}
         {answer && (
-          <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-            <div
-              className="prose max-w-none text-gray-800"
-              dangerouslySetInnerHTML={{ __html: formatAnswer(answer) }}
-            />
-            <div className="text-xs text-gray-500 mt-2">
-              🕒 Last updated: {new Date().toLocaleTimeString()}
-            </div>
+          <Card className="mb-4">
+            <CardContent className="p-4">
+              <h2 className="text-lg font-semibold mb-2">Answer:</h2>
+              <div className="prose">{highlightReferences(answer)}</div>
+              <div className="flex gap-4 mt-2 text-gray-500">
+                <button onClick={() => navigator.clipboard.writeText(answer)}>
+                  <Copy size={16} className="inline mr-1" /> Copy
+                </button>
+                <button
+                  onClick={() =>
+                    navigator.share
+                      ? navigator.share({ text: answer })
+                      : alert("Sharing not supported")
+                  }
+                >
+                  <Share2 size={16} className="inline mr-1" /> Share
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-            <div className="flex gap-3 mt-3">
-              <button
-                onClick={handleCopy}
-                className="text-sm px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-lg"
-              >
-                📋 Copy
-              </button>
-              <button
-                onClick={() =>
-                  navigator.share?.({
-                    title: "Bible AI Answer",
-                    text: answer,
-                  })
-                }
-                className="text-sm px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-lg"
-              >
-                🔗 Share
-              </button>
-            </div>
+        {relatedQuestions.length > 0 && (
+          <div className="mb-4">
+            <h3 className="text-md font-semibold mb-2 text-purple-600">
+              Related Questions:
+            </h3>
+            <ul className="list-disc pl-6">
+              {relatedQuestions.map((q, i) => (
+                <li key={i} className="text-gray-700">
+                  {q}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
-        {/* Suggested + Related + Recent in grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Related */}
-          {related.length > 0 && (
-            <div className="bg-white rounded-xl shadow p-4">
-              <h2 className="font-semibold mb-2 text-gray-700">
-                Related Questions
-              </h2>
-              <ul className="list-disc ml-5 space-y-1 text-sm text-gray-600">
-                {related.map((q, idx) => (
-                  <li key={idx}>{q}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Suggested */}
-          {suggested.length > 0 && (
-            <div className="bg-white rounded-xl shadow p-4">
-              <h2 className="font-semibold mb-2 text-gray-700">
-                Suggested Questions
-              </h2>
-              <ul className="list-disc ml-5 space-y-1 text-sm text-gray-600">
-                {suggested.map((q, idx) => (
-                  <li key={idx}>{q}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Recent */}
-          {recent.length > 0 && (
-            <div className="bg-white rounded-xl shadow p-4">
-              <h2 className="font-semibold mb-2 text-gray-700">
-                Recent Questions
-              </h2>
-              <ul className="list-disc ml-5 space-y-1 text-sm text-gray-600">
-                {recent.map((q, idx) => (
-                  <li key={idx}>{q}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </div>
+        {recentQuestions.length > 0 && (
+          <div>
+            <h3 className="text-md font-semibold mb-2 text-purple-600">
+              Recent Questions:
+            </h3>
+            <ul className="list-disc pl-6">
+              {recentQuestions.map((q, i) => (
+                <li key={i} className="text-gray-700">
+                  {q}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </motion.div>
     </div>
   );
 }
-
-export default App;
