@@ -32,7 +32,7 @@ export default function App() {
     "Explain the Ten Commandments",
   ];
 
-  // --- Formatting helpers (do NOT change layout/colors) ---
+  // --- Formatting helpers (no layout/color change) ---
   const verseRegex = /\b(?:[1-3]?\s?[A-Z][a-z]+)\s\d{1,3}:\d{1,3}(?:[-–]\d{1,3})?\b/g;
   const boldTerms =
     /\b(God|Jesus|Christ|Holy\sSpirit|Spirit|faith|grace|love|hope|salvation|forgiveness)\b/gi;
@@ -48,10 +48,31 @@ export default function App() {
   const formatAnswerHtml = (text) => {
     if (!text) return "";
     const safe = escapeHtml(text.trim());
+
+    // Split paragraphs by 2+ newlines
     const paragraphs = safe.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
 
-    const html = paragraphs
+    return paragraphs
       .map((p) => {
+        // handle bullet points inside paragraph
+        if (/^[-•]\s/m.test(p)) {
+          const items = p
+            .split(/\n/)
+            .filter((line) => /^[-•]\s/.test(line))
+            .map(
+              (line) =>
+                "<li>" +
+                line
+                  .replace(/^[-•]\s*/, "")
+                  .replace(verseRegex, "<em>$&</em>")
+                  .replace(boldTerms, "<strong>$&</strong>") +
+                "</li>"
+            )
+            .join("");
+          return `<ul>${items}</ul>`;
+        }
+
+        // normal paragraph
         let phtml = p
           .replace(verseRegex, "<em>$&</em>")
           .replace(boldTerms, "<strong>$&</strong>")
@@ -59,34 +80,49 @@ export default function App() {
         return `<p>${phtml}</p>`;
       })
       .join("");
-
-    return html;
   };
 
-  // --- Related questions generator (lightweight heuristic) ---
+  // --- Mini NLP topic extractor ---
+  const extractTopics = (q, a) => {
+    const text = (q + " " + (a || "")).toLowerCase();
+
+    // candidate keywords (filter out common stopwords)
+    const tokens = text.match(/\b[a-z]{3,}\b/g) || [];
+    const stopwords = new Set([
+      "what", "does", "the", "and", "for", "about", "with", "from", "that",
+      "this", "who", "was", "are", "say", "tell", "story", "explain", "give",
+      "into", "how", "can", "you", "next", "one", "sentence"
+    ]);
+
+    const freq = {};
+    for (const t of tokens) {
+      if (!stopwords.has(t)) {
+        freq[t] = (freq[t] || 0) + 1;
+      }
+    }
+
+    // pick top 2 frequent words as "topics"
+    const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]);
+    return sorted.slice(0, 2).map(([word]) => word);
+  };
+
   const generateRelatedQuestions = (q, a) => {
-    const base = [
+    const topics = extractTopics(q, a);
+
+    if (topics.length > 0) {
+      return [
+        `What key verses about ${topics.join(" and ")} should I read next?`,
+        `How does the Bible apply ${topics[0]} to daily life?`,
+        `Can you summarize ${topics.join(" and ")} in one sentence?`,
+      ];
+    }
+
+    // fallback
+    return [
       "What related verses support this?",
       "How can I apply this teaching today?",
       "Summarize this in one sentence.",
     ];
-
-    // Try to pull a topic from the query (first capitalized word or key term)
-    const topicMatch =
-      q.match(/\b([A-Z][a-z]{3,}(?:\s[A-Z][a-z]+)?)\b/) ||
-      q.match(/\b(Moses|David|Jesus|Paul|Peter|Spirit|Faith|Love|Grace|Hope)\b/i);
-
-    const topic = topicMatch ? topicMatch[0] : null;
-
-    if (topic) {
-      return [
-        `What key verses about ${topic} should I read next?`,
-        `How does the Bible apply ${topic} to daily life?`,
-        `Can you summarize ${topic} in one sentence?`,
-      ];
-    }
-
-    return base;
   };
 
   const fetchAnswer = async (customQuery = query) => {
@@ -235,14 +271,12 @@ export default function App() {
           {answer && (
             <>
               <strong>Answer:</strong>
-              {/* formatted HTML (paragraphs + italics for verse refs + bold key terms) */}
               <div
                 className="formatted-answer"
                 dangerouslySetInnerHTML={{ __html: formatAnswerHtml(answer) }}
               />
               {lastUpdated && <small>🕒 Last updated: {lastUpdated}</small>}
 
-              {/* Actions */}
               <div className="action-buttons">
                 <button onClick={copyToClipboard} className="copy-btn">
                   📋 Copy
@@ -252,7 +286,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Related Questions (uses existing blue pill buttons styles) */}
               {relatedQuestions.length > 0 && (
                 <div className="suggestions" style={{ marginTop: "0.75rem" }}>
                   <h3>Related questions:</h3>
