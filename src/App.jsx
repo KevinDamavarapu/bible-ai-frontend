@@ -1,216 +1,153 @@
-import React, { useState } from "react";
-import { Copy, Share2, Loader2 } from "lucide-react";
+import { useState } from "react";
+import "./App.css";
 
-export default function App() {
+function App() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
-  const [related, setRelated] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState([]);
-  const [showHistory, setShowHistory] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [shared, setShared] = useState(false);
-  const [backendWaking, setBackendWaking] = useState(false);
+  const [related, setRelated] = useState([]);
+  const [suggested, setSuggested] = useState([]);
+  const [recent, setRecent] = useState([]);
 
-  // ✅ safer regex formatter
-  const formatBibleReferences = (text) => {
-    const bibleRegex = /\b([1-3]?\s?[A-Za-z]+)\s+(\d+):(\d+(?:-\d+)?)/g;
-    const parts = [];
-    let lastIndex = 0;
-    let match;
+  // --- Format answer: bold + Bible links ---
+  const formatAnswer = (text) => {
+    if (!text) return "";
 
-    while ((match = bibleRegex.exec(text)) !== null) {
-      const [full, book, chapter, verse] = match;
-
-      // Add text before the match
-      if (match.index > lastIndex) {
-        parts.push(text.slice(lastIndex, match.index));
-      }
-
-      // Build link
-      const urlBook = book.replace(/\s+/g, "");
-      const url = `https://www.bible.com/bible/111/${urlBook}.${chapter}.${verse}`; // NIV (111)
-
-      parts.push(
-        <a
-          key={match.index}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-400 underline"
-        >
-          {full}
-        </a>
-      );
-
-      lastIndex = bibleRegex.lastIndex;
-    }
-
-    // Add remaining text
-    if (lastIndex < text.length) {
-      parts.push(text.slice(lastIndex));
-    }
-
-    return parts;
+    return text
+      // Bold formatting for *words*
+      .replace(/\*(.*?)\*/g, "<strong>$1</strong>")
+      // Turn "John 3:16" etc. into clickable links
+      .replace(/\b([1-3]?\s?[A-Za-z]+\s\d+:\d+(-\d+)?)/g, (match) => {
+        const encoded = match.replace(/\s+/g, "%20");
+        return `<a href="https://www.bible.com/bible/111/${encoded}.NIV" target="_blank" class="text-blue-600 underline">${match}</a>`;
+      });
   };
 
-  const extractTopic = (q) => {
-    const stopwords = ["what", "is", "the", "of", "in", "a", "an", "to", "and", "about"];
-    return q
-      .split(" ")
-      .filter((word) => !stopwords.includes(word.toLowerCase()))
-      .slice(0, 5)
-      .join(" ");
-  };
-
-  const handleAsk = async (customQuestion) => {
-    const q = customQuestion || question;
-    if (!q.trim()) return;
-
+  const handleAsk = async () => {
+    if (!question.trim()) return;
     setLoading(true);
     setAnswer("");
     setRelated([]);
-    setCopied(false);
-    setShared(false);
-
-    const wakingTimer = setTimeout(() => {
-      setBackendWaking(true);
-    }, 2000);
+    setSuggested([]);
 
     try {
-      const res = await fetch("https://bible-ai-backend.vercel.app/ask", {
+      const res = await fetch("https://your-backend.vercel.app/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q }),
+        body: JSON.stringify({ question }),
       });
-
-      clearTimeout(wakingTimer);
-      setBackendWaking(false);
 
       const data = await res.json();
       setAnswer(data.answer || "No answer found.");
-
-      const topic = extractTopic(q);
-      setRelated([
-        `What key verses about ${topic} should I read next?`,
-        `How does the Bible apply ${topic} to daily life?`,
-        `Can you summarize ${topic} in one sentence?`,
-      ]);
-
-      setHistory([{ q, a: data.answer }, ...history]);
-      setQuestion("");
-    } catch (error) {
-      clearTimeout(wakingTimer);
-      setBackendWaking(false);
-      setAnswer("Error fetching answer. Please try again.");
-    } finally {
-      setLoading(false);
+      setRelated(data.relatedQuestions || []);
+      setSuggested(data.suggestedQuestions || []);
+      setRecent((prev) => [question, ...prev.slice(0, 4)]);
+    } catch (err) {
+      setAnswer("⚠️ Error fetching answer. Please try again.");
     }
+    setLoading(false);
   };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(answer);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({ title: "Bible AI", text: answer });
-      setShared(true);
-      setTimeout(() => setShared(false), 2000);
-    } else {
-      alert("Sharing not supported on this browser.");
-    }
+    alert("Answer copied!");
   };
 
   return (
-    <div className="min-h-screen bg-white text-black p-6">
-      <h1 className="text-3xl font-bold mb-6 text-center">Bible AI</h1>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-3xl mx-auto bg-white shadow-md rounded-xl p-6">
+        <h1 className="text-2xl font-bold mb-4 text-gray-800">
+          Bible AI Assistant
+        </h1>
 
-      <div className="flex justify-center mb-6">
-        <input
-          type="text"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleAsk()}
-          placeholder="Ask me a question..."
-          className="border border-gray-400 rounded-l px-4 py-2 w-2/3"
-        />
-        <button
-          onClick={() => handleAsk()}
-          disabled={loading}
-          className="bg-black text-white px-4 py-2 rounded-r"
-        >
-          {loading ? <Loader2 className="animate-spin" size={20} /> : "Ask"}
-        </button>
-      </div>
-
-      {backendWaking && (
-        <p className="text-center text-gray-600 mb-4">
-          ⏳ Waking up the backend, please wait...
-        </p>
-      )}
-
-      {answer && (
-        <div className="border border-gray-400 p-4 rounded mb-4 bg-black text-white">
-          <p className="mb-4">{formatBibleReferences(answer)}</p>
-          <div className="flex gap-4">
-            <button
-              onClick={handleCopy}
-              className="flex items-center gap-2 bg-gray-700 px-3 py-1 rounded"
-            >
-              <Copy size={16} />
-              {copied ? "Copied!" : "Copy"}
-            </button>
-            <button
-              onClick={handleShare}
-              className="flex items-center gap-2 bg-gray-700 px-3 py-1 rounded"
-            >
-              <Share2 size={16} />
-              {shared ? "Shared!" : "Share"}
-            </button>
-          </div>
+        {/* Question Input */}
+        <div className="flex mb-4">
+          <input
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            className="flex-1 border rounded-l-lg p-2"
+            placeholder="Ask a Bible question..."
+          />
+          <button
+            onClick={handleAsk}
+            className="bg-blue-600 text-white px-4 rounded-r-lg"
+            disabled={loading}
+          >
+            {loading ? "Loading..." : "Ask"}
+          </button>
         </div>
-      )}
 
-      {related.length > 0 && (
-        <div className="border border-gray-400 p-4 rounded mb-4 bg-black text-white">
-          <h2 className="font-semibold mb-2">Try one of these:</h2>
-          <ul className="list-disc list-inside">
-            {related.map((r, i) => (
-              <li
-                key={i}
-                className="cursor-pointer hover:underline"
-                onClick={() => handleAsk(r)}
-              >
-                {r}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <button
-        onClick={() => setShowHistory(!showHistory)}
-        className="mb-4 underline"
-      >
-        {showHistory ? "Hide History" : "Show History"}
-      </button>
-
-      {showHistory && (
-        <div className="space-y-4">
-          {history.map((h, i) => (
+        {/* Answer */}
+        {answer && (
+          <div className="border rounded-lg p-4 bg-gray-50 mb-4">
             <div
-              key={i}
-              className="border border-gray-400 p-4 rounded bg-black text-white"
-            >
-              <p className="font-semibold">Q: {h.q}</p>
-              <p className="mt-2">{formatBibleReferences(h.a)}</p>
+              className="prose max-w-none"
+              dangerouslySetInnerHTML={{ __html: formatAnswer(answer) }}
+            />
+            <div className="text-sm text-gray-500 mt-2">
+              🕒 Last updated: {new Date().toLocaleTimeString()}
             </div>
-          ))}
-        </div>
-      )}
+
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={handleCopy}
+                className="text-sm px-2 py-1 bg-gray-200 rounded"
+              >
+                📋 Copy
+              </button>
+              <button
+                onClick={() =>
+                  navigator.share?.({
+                    title: "Bible AI Answer",
+                    text: answer,
+                  })
+                }
+                className="text-sm px-2 py-1 bg-gray-200 rounded"
+              >
+                🔗 Share
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Related Questions */}
+        {related.length > 0 && (
+          <div className="mb-4">
+            <h2 className="font-semibold mb-2">Related questions:</h2>
+            <ul className="list-disc ml-5">
+              {related.map((q, idx) => (
+                <li key={idx}>{q}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Suggested Questions */}
+        {suggested.length > 0 && (
+          <div className="mb-4">
+            <h2 className="font-semibold mb-2">Suggested questions:</h2>
+            <ul className="list-disc ml-5">
+              {suggested.map((q, idx) => (
+                <li key={idx}>{q}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Recent Questions */}
+        {recent.length > 0 && (
+          <div className="mt-6">
+            <h2 className="font-semibold mb-2">Recent questions:</h2>
+            <ul className="list-disc ml-5">
+              {recent.map((q, idx) => (
+                <li key={idx}>{q}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
+export default App;
