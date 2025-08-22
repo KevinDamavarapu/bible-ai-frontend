@@ -1,194 +1,214 @@
 import React, { useState } from "react";
-import { motion } from "framer-motion";
-import { Copy, Share2, Clock } from "lucide-react";
+import { Copy, Share2, Loader2 } from "lucide-react";
 
 export default function App() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
-  const [relatedQuestions, setRelatedQuestions] = useState([]);
+  const [related, setRelated] = useState([]);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
+  const [backendWaking, setBackendWaking] = useState(false);
 
-  // --- Bible Reference Linker ---
-  const makeBibleLinks = (text) => {
-    const refRegex = /\b([1-3]?\s?[A-Za-z]+\s\d{1,3}:\d{1,3})\b/g;
-    return text.replace(refRegex, (match) => {
-      try {
-        const [book, chapterVerse] = match.split(" ");
-        const [chapter, verse] = chapterVerse.split(":");
-        const bookCode = book
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, "")
-          .slice(0, 3); // crude short code
-        return `<a href="https://www.bible.com/bible/111/${bookCode.toUpperCase()}.${chapter}.${verse}.NIV" target="_blank" class="text-blue-500 underline">${match}</a>`;
-      } catch {
-        return match;
-      }
-    });
-  };
+  // ✅ safer regex formatter
+  const formatBibleReferences = (text) => {
+    const bibleRegex = /\b([1-3]?\s?[A-Za-z]+)\s+(\d+):(\d+(?:-\d+)?)/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
 
-  // --- Fetch answer + related questions ---
-  const fetchAnswer = async () => {
-    if (!question.trim()) return;
-    setLoading(true);
-    setAnswer("");
-    setRelatedQuestions([]);
+    while ((match = bibleRegex.exec(text)) !== null) {
+      const [full, book, chapter, verse] = match;
 
-    try {
-      const res = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
-      });
-      const data = await res.json();
-
-      const formattedAnswer = makeBibleLinks(data.answer || "");
-      setAnswer(formattedAnswer);
-
-      // Fix: extract related questions properly
-      if (Array.isArray(data.related)) {
-        const cleaned = data.related.map((q) =>
-          q.replace(/^["']|["']$/g, "").trim()
-        );
-        setRelatedQuestions(cleaned);
+      // Add text before the match
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
       }
 
-      // Save in history
-      setHistory((prev) => [
-        { question, answer: formattedAnswer, time: new Date().toLocaleTimeString() },
-        ...prev.slice(0, 4),
-      ]);
-    } catch (err) {
-      console.error(err);
-      setAnswer("⚠️ Error fetching answer. Please try again.");
+      // Build link
+      const urlBook = book.replace(/\s+/g, "");
+      const url = `https://www.bible.com/bible/111/${urlBook}.${chapter}.${verse}`; // NIV (111)
+
+      parts.push(
+        <a
+          key={match.index}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-400 underline"
+        >
+          {full}
+        </a>
+      );
+
+      lastIndex = bibleRegex.lastIndex;
     }
 
-    setLoading(false);
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return parts;
+  };
+
+  const extractTopic = (q) => {
+    const stopwords = ["what", "is", "the", "of", "in", "a", "an", "to", "and", "about"];
+    return q
+      .split(" ")
+      .filter((word) => !stopwords.includes(word.toLowerCase()))
+      .slice(0, 5)
+      .join(" ");
+  };
+
+  const handleAsk = async (customQuestion) => {
+    const q = customQuestion || question;
+    if (!q.trim()) return;
+
+    setLoading(true);
+    setAnswer("");
+    setRelated([]);
+    setCopied(false);
+    setShared(false);
+
+    const wakingTimer = setTimeout(() => {
+      setBackendWaking(true);
+    }, 2000);
+
+    try {
+      const res = await fetch("https://bible-ai-backend.vercel.app/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q }),
+      });
+
+      clearTimeout(wakingTimer);
+      setBackendWaking(false);
+
+      const data = await res.json();
+      setAnswer(data.answer || "No answer found.");
+
+      const topic = extractTopic(q);
+      setRelated([
+        `What key verses about ${topic} should I read next?`,
+        `How does the Bible apply ${topic} to daily life?`,
+        `Can you summarize ${topic} in one sentence?`,
+      ]);
+
+      setHistory([{ q, a: data.answer }, ...history]);
+      setQuestion("");
+    } catch (error) {
+      clearTimeout(wakingTimer);
+      setBackendWaking(false);
+      setAnswer("Error fetching answer. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(answer.replace(/<[^>]+>/g, ""));
+    navigator.clipboard.writeText(answer);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleShare = () => {
     if (navigator.share) {
-      navigator.share({ text: answer.replace(/<[^>]+>/g, "") });
+      navigator.share({ title: "Bible AI", text: answer });
+      setShared(true);
+      setTimeout(() => setShared(false), 2000);
     } else {
-      alert("Sharing not supported in this browser.");
+      alert("Sharing not supported on this browser.");
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 p-6 flex flex-col items-center">
-      <motion.h1
-        className="text-4xl font-bold mb-6 text-indigo-700"
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        Bible AI 📖✨
-      </motion.h1>
+    <div className="min-h-screen bg-white text-black p-6">
+      <h1 className="text-3xl font-bold mb-6 text-center">Bible AI</h1>
 
-      {/* Input */}
-      <div className="flex gap-2 mb-6 w-full max-w-2xl">
+      <div className="flex justify-center mb-6">
         <input
+          type="text"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && fetchAnswer()}
-          className="flex-1 p-3 rounded-2xl border border-indigo-300 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
-          placeholder="Ask something about the Bible..."
+          onKeyDown={(e) => e.key === "Enter" && handleAsk()}
+          placeholder="Ask me a question..."
+          className="border border-gray-400 rounded-l px-4 py-2 w-2/3"
         />
         <button
-          onClick={fetchAnswer}
-          className="px-5 py-3 bg-indigo-600 text-white rounded-2xl shadow hover:bg-indigo-700"
+          onClick={() => handleAsk()}
+          disabled={loading}
+          className="bg-black text-white px-4 py-2 rounded-r"
         >
-          Ask
+          {loading ? <Loader2 className="animate-spin" size={20} /> : "Ask"}
         </button>
       </div>
 
-      {/* Answer Card */}
-      {loading ? (
-        <p className="text-gray-600 animate-pulse">⏳ Waking up backend...</p>
-      ) : answer ? (
-        <motion.div
-          className="bg-white rounded-2xl shadow-lg p-6 max-w-2xl w-full border border-gray-200"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <div
-            className="prose prose-indigo max-w-none"
-            dangerouslySetInnerHTML={{ __html: answer }}
-          />
-          <div className="flex items-center gap-4 mt-4">
+      {backendWaking && (
+        <p className="text-center text-gray-600 mb-4">
+          ⏳ Waking up the backend, please wait...
+        </p>
+      )}
+
+      {answer && (
+        <div className="border border-gray-400 p-4 rounded mb-4 bg-black text-white">
+          <p className="mb-4">{formatBibleReferences(answer)}</p>
+          <div className="flex gap-4">
             <button
               onClick={handleCopy}
-              className="flex items-center gap-2 text-indigo-600 hover:underline"
+              className="flex items-center gap-2 bg-gray-700 px-3 py-1 rounded"
             >
-              <Copy size={18} /> {copied ? "Copied!" : "Copy"}
+              <Copy size={16} />
+              {copied ? "Copied!" : "Copy"}
             </button>
             <button
               onClick={handleShare}
-              className="flex items-center gap-2 text-indigo-600 hover:underline"
+              className="flex items-center gap-2 bg-gray-700 px-3 py-1 rounded"
             >
-              <Share2 size={18} /> Share
+              <Share2 size={16} />
+              {shared ? "Shared!" : "Share"}
             </button>
           </div>
-          <p className="text-xs text-gray-400 mt-2">
-            🕒 Last updated: {new Date().toLocaleTimeString()}
-          </p>
-        </motion.div>
-      ) : null}
+        </div>
+      )}
 
-      {/* Related Questions */}
-      {relatedQuestions.length > 0 && (
-        <div className="mt-6 max-w-2xl w-full">
-          <h2 className="text-lg font-semibold text-indigo-700 mb-2">
-            Related questions:
-          </h2>
-          <ul className="list-disc list-inside space-y-1 text-indigo-600">
-            {relatedQuestions.map((q, idx) => (
+      {related.length > 0 && (
+        <div className="border border-gray-400 p-4 rounded mb-4 bg-black text-white">
+          <h2 className="font-semibold mb-2">Try one of these:</h2>
+          <ul className="list-disc list-inside">
+            {related.map((r, i) => (
               <li
-                key={idx}
-                onClick={() => {
-                  setQuestion(q);
-                  fetchAnswer();
-                }}
+                key={i}
                 className="cursor-pointer hover:underline"
+                onClick={() => handleAsk(r)}
               >
-                {q}
+                {r}
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {/* History */}
-      {history.length > 0 && (
-        <div className="mt-8 max-w-2xl w-full">
-          <h2 className="text-lg font-semibold text-indigo-700 mb-2 flex items-center gap-2">
-            <Clock size={18} /> Recent Questions
-          </h2>
-          <ul className="space-y-2">
-            {history.map((item, idx) => (
-              <li
-                key={idx}
-                onClick={() => {
-                  setQuestion(item.question);
-                  setAnswer(item.answer);
-                }}
-                className="cursor-pointer bg-white p-3 rounded-xl shadow border hover:bg-indigo-50"
-              >
-                <p className="font-medium text-indigo-800">{item.question}</p>
-                <p
-                  className="text-sm text-gray-600 line-clamp-2"
-                  dangerouslySetInnerHTML={{ __html: item.answer }}
-                />
-                <p className="text-xs text-gray-400">Asked at {item.time}</p>
-              </li>
-            ))}
-          </ul>
+      <button
+        onClick={() => setShowHistory(!showHistory)}
+        className="mb-4 underline"
+      >
+        {showHistory ? "Hide History" : "Show History"}
+      </button>
+
+      {showHistory && (
+        <div className="space-y-4">
+          {history.map((h, i) => (
+            <div
+              key={i}
+              className="border border-gray-400 p-4 rounded bg-black text-white"
+            >
+              <p className="font-semibold">Q: {h.q}</p>
+              <p className="mt-2">{formatBibleReferences(h.a)}</p>
+            </div>
+          ))}
         </div>
       )}
     </div>
