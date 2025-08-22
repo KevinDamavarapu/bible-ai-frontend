@@ -1,115 +1,196 @@
 import React, { useState } from "react";
+import { motion } from "framer-motion";
+import { Copy, Share2, Clock } from "lucide-react";
 
 export default function App() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [relatedQuestions, setRelatedQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [copied, setCopied] = useState(false);
 
-  // Regex to match Bible references like "Ephesians 4:32" or "Matthew 18:21-35"
-  const bibleRefRegex = /\b([1-3]?\s?[A-Za-z]+)\s(\d+):(\d+)(?:-(\d+))?\b/g;
-
-  // Function to format answers and add clickable Bible.com links (NIV)
-  const formatAnswerWithLinks = (text) => {
-    return text.split("\n").map((line, idx) => {
-      const formattedLine = line.replace(bibleRefRegex, (match, book, chapter, verse, endVerse) => {
-        const ref = `${book} ${chapter}:${verse}${endVerse ? "-" + endVerse : ""}`;
-        const urlBook = book.replace(/\s/g, "").toLowerCase(); // bible.com uses lowercase with no spaces
-        const url = `https://www.bible.com/bible/111/${urlBook}.${chapter}.${verse}.NIV`;
-        return `<a href="${url}" target="_blank" class="text-blue-600 underline">${ref}</a>`;
-      });
-
-      return (
-        <p
-          key={idx}
-          dangerouslySetInnerHTML={{ __html: formattedLine }}
-          className="mb-2"
-        />
-      );
+  // --- Bible Reference Linker ---
+  const makeBibleLinks = (text) => {
+    const refRegex = /\b([1-3]?\s?[A-Za-z]+\s\d{1,3}:\d{1,3})\b/g;
+    return text.replace(refRegex, (match) => {
+      try {
+        const [book, chapterVerse] = match.split(" ");
+        const [chapter, verse] = chapterVerse.split(":");
+        const bookCode = book
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "")
+          .slice(0, 3); // crude short code
+        return `<a href="https://www.bible.com/bible/111/${bookCode.toUpperCase()}.${chapter}.${verse}.NIV" target="_blank" class="text-blue-500 underline">${match}</a>`;
+      } catch {
+        return match;
+      }
     });
   };
 
-  const handleAsk = async () => {
+  // --- Fetch answer + related questions ---
+  const fetchAnswer = async () => {
     if (!question.trim()) return;
     setLoading(true);
-    setError(null);
     setAnswer("");
     setRelatedQuestions([]);
 
     try {
-      const res = await fetch("http://localhost:5000/ask", {
+      const res = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question }),
       });
-
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
 
-      setAnswer(data.answer || "No answer found.");
-      setRelatedQuestions(data.related_questions || []);
+      const formattedAnswer = makeBibleLinks(data.answer || "");
+      setAnswer(formattedAnswer);
+
+      // Fix: extract related questions properly
+      if (Array.isArray(data.related)) {
+        const cleaned = data.related.map((q) =>
+          q.replace(/^["']|["']$/g, "").trim()
+        );
+        setRelatedQuestions(cleaned);
+      }
+
+      // Save in history
+      setHistory((prev) => [
+        { question, answer: formattedAnswer, time: new Date().toLocaleTimeString() },
+        ...prev.slice(0, 4),
+      ]);
     } catch (err) {
-      setError("Something went wrong. Please try again.");
       console.error(err);
-    } finally {
-      setLoading(false);
+      setAnswer("⚠️ Error fetching answer. Please try again.");
+    }
+
+    setLoading(false);
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(answer.replace(/<[^>]+>/g, ""));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({ text: answer.replace(/<[^>]+>/g, "") });
+    } else {
+      alert("Sharing not supported in this browser.");
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center p-6">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">
-        Bible AI Companion
-      </h1>
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 p-6 flex flex-col items-center">
+      <motion.h1
+        className="text-4xl font-bold mb-6 text-indigo-700"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        Bible AI 📖✨
+      </motion.h1>
 
-      <div className="w-full max-w-2xl bg-white p-6 rounded-2xl shadow-md">
-        <textarea
+      {/* Input */}
+      <div className="flex gap-2 mb-6 w-full max-w-2xl">
+        <input
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Ask a question about the Bible..."
-          className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring focus:ring-blue-200"
-          rows={3}
+          onKeyDown={(e) => e.key === "Enter" && fetchAnswer()}
+          className="flex-1 p-3 rounded-2xl border border-indigo-300 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
+          placeholder="Ask something about the Bible..."
         />
         <button
-          onClick={handleAsk}
-          disabled={loading}
-          className="mt-3 bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 disabled:bg-gray-400"
+          onClick={fetchAnswer}
+          className="px-5 py-3 bg-indigo-600 text-white rounded-2xl shadow hover:bg-indigo-700"
         >
-          {loading ? "Thinking..." : "Ask"}
+          Ask
         </button>
-
-        {error && <p className="text-red-500 mt-3">{error}</p>}
-
-        {answer && (
-          <div className="mt-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">
-              Answer:
-            </h2>
-            <div className="prose prose-blue">
-              {formatAnswerWithLinks(answer)}
-            </div>
-            <p className="text-sm text-gray-500 mt-2">
-              🕒 Last updated: {new Date().toLocaleTimeString()}
-            </p>
-          </div>
-        )}
-
-        {relatedQuestions.length > 0 && (
-          <div className="mt-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
-              Related questions:
-            </h3>
-            <ul className="list-disc pl-5 text-gray-700">
-              {relatedQuestions.map((q, i) => (
-                <li key={i} className="mb-1">
-                  {q}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
+
+      {/* Answer Card */}
+      {loading ? (
+        <p className="text-gray-600 animate-pulse">⏳ Waking up backend...</p>
+      ) : answer ? (
+        <motion.div
+          className="bg-white rounded-2xl shadow-lg p-6 max-w-2xl w-full border border-gray-200"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div
+            className="prose prose-indigo max-w-none"
+            dangerouslySetInnerHTML={{ __html: answer }}
+          />
+          <div className="flex items-center gap-4 mt-4">
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-2 text-indigo-600 hover:underline"
+            >
+              <Copy size={18} /> {copied ? "Copied!" : "Copy"}
+            </button>
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-2 text-indigo-600 hover:underline"
+            >
+              <Share2 size={18} /> Share
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            🕒 Last updated: {new Date().toLocaleTimeString()}
+          </p>
+        </motion.div>
+      ) : null}
+
+      {/* Related Questions */}
+      {relatedQuestions.length > 0 && (
+        <div className="mt-6 max-w-2xl w-full">
+          <h2 className="text-lg font-semibold text-indigo-700 mb-2">
+            Related questions:
+          </h2>
+          <ul className="list-disc list-inside space-y-1 text-indigo-600">
+            {relatedQuestions.map((q, idx) => (
+              <li
+                key={idx}
+                onClick={() => {
+                  setQuestion(q);
+                  fetchAnswer();
+                }}
+                className="cursor-pointer hover:underline"
+              >
+                {q}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* History */}
+      {history.length > 0 && (
+        <div className="mt-8 max-w-2xl w-full">
+          <h2 className="text-lg font-semibold text-indigo-700 mb-2 flex items-center gap-2">
+            <Clock size={18} /> Recent Questions
+          </h2>
+          <ul className="space-y-2">
+            {history.map((item, idx) => (
+              <li
+                key={idx}
+                onClick={() => {
+                  setQuestion(item.question);
+                  setAnswer(item.answer);
+                }}
+                className="cursor-pointer bg-white p-3 rounded-xl shadow border hover:bg-indigo-50"
+              >
+                <p className="font-medium text-indigo-800">{item.question}</p>
+                <p
+                  className="text-sm text-gray-600 line-clamp-2"
+                  dangerouslySetInnerHTML={{ __html: item.answer }}
+                />
+                <p className="text-xs text-gray-400">Asked at {item.time}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
