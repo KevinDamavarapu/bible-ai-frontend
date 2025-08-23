@@ -11,8 +11,9 @@ const API_URL = `${API_BASE}/bible`;
 
 // ---------- Formatting & NLP Helpers (layout/colors unchanged) ----------
 
+// FIXED regex: handles multi-word book names like "Song of Solomon", "1 Thessalonians"
 const verseRegex =
-  /\b((?:[1-3]\s*)?(?:[A-Z][a-z]+(?:\s(?:of|the|and|[A-Z][a-z]+))*)?)\s+(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?\b/g;
+  /\b((?:[1-3]\s*)?(?:[A-Z][a-z]+(?:\s(?:of|the|and|[A-Z][a-z]+))*))\s+(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?\b/g;
 
 const boldTerms =
   /\b(God|Jesus|Christ|Holy\sSpirit|Spirit|faith|grace|love|hope|salvation|forgiveness|sin|mercy|righteousness)\b/gi;
@@ -62,55 +63,12 @@ const extractTopic = (q) => {
   if (quoted?.[1]) s = quoted[1];
   s = s.replace(/[^\w\s-]/g, " ");
   const stop = new Set([
-    "what",
-    "who",
-    "whom",
-    "whose",
-    "when",
-    "where",
-    "why",
-    "how",
-    "is",
-    "are",
-    "am",
-    "was",
-    "were",
-    "be",
-    "being",
-    "been",
-    "the",
-    "a",
-    "an",
-    "of",
-    "to",
-    "in",
-    "and",
-    "or",
-    "for",
-    "with",
-    "from",
-    "by",
-    "about",
-    "on",
-    "as",
-    "that",
-    "this",
-    "these",
-    "those",
-    "please",
-    "explain",
-    "tell",
-    "me",
-    "does",
-    "do",
-    "did",
-    "can",
-    "you",
-    "give",
-    "summarize",
-    "explanation",
-    "story",
-    "parable",
+    "what","who","whom","whose","when","where","why","how",
+    "is","are","am","was","were","be","being","been","the",
+    "a","an","of","to","in","and","or","for","with","from",
+    "by","about","on","as","that","this","these","those",
+    "please","explain","tell","me","does","do","did","can",
+    "you","give","summarize","explanation","story","parable",
   ]);
   const tokens = s.split(/\s+/).map((w) => w.trim()).filter(Boolean);
   const kept = tokens.filter((w) => {
