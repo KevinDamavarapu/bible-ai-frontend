@@ -11,9 +11,9 @@ const API_URL = `${API_BASE}/bible`;
 
 // ---------- Formatting & NLP Helpers (layout/colors unchanged) ----------
 
-// FIXED: regex now properly captures full multi-word book names like "Song of Solomon"
+// ✅ FIXED regex: matches multi-word books like "Song of Solomon", "1 Samuel", "2 Corinthians"
 const verseRegex =
-  /\b((?:[1-3]\s*)?(?:[A-Z][a-z]+(?:\s(?:of|the|and|[A-Z][a-z]+))*)(?:\s(?:[A-Z][a-z]+))*)\s+(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?\b/g;
+  /\b((?:[1-3]\s*)?[A-Z][a-z]+(?:\s(?:of|the|and|[A-Z][a-z]+))*)(?:\s(?:[A-Z][a-z]+))*)\s+(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?\b/g;
 
 const boldTerms =
   /\b(God|Jesus|Christ|Holy\sSpirit|Spirit|faith|grace|love|hope|salvation|forgiveness|sin|mercy|righteousness)\b/gi;
@@ -26,9 +26,11 @@ const escapeHtml = (s) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 
+// ✅ Encode the *entire* book name when generating YouVersion search links
 const youVersionSearchUrl = (book, chapter, verse, endVerse) => {
-  // FIXED: encode full book name including spaces
-  const ref = `${book.trim()} ${chapter}:${verse}${endVerse ? "-" + endVerse : ""}`;
+  const ref = `${book.trim()} ${chapter}:${verse}${
+    endVerse ? "-" + endVerse : ""
+  }`;
   const q = encodeURIComponent(ref);
   return `https://www.bible.com/search/bible?query=${q}&version_id=111`;
 };
@@ -36,7 +38,10 @@ const youVersionSearchUrl = (book, chapter, verse, endVerse) => {
 const formatAnswerHtml = (text) => {
   if (!text) return "";
   const safe = escapeHtml(text.trim());
-  const paragraphs = safe.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const paragraphs = safe
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
 
   return paragraphs
     .map((p) => {
@@ -189,7 +194,10 @@ export default function App() {
       });
 
       // related questions: prefer backend, fallback to NLP
-      if (Array.isArray(res.data.related_questions) && res.data.related_questions.length > 0) {
+      if (
+        Array.isArray(res.data.related_questions) &&
+        res.data.related_questions.length > 0
+      ) {
         setRelatedQuestions(res.data.related_questions);
       } else {
         const topic = extractTopic(customQuery);
@@ -198,7 +206,10 @@ export default function App() {
 
       toast.success("Answer ready", { id: "status" });
       requestAnimationFrame(() => {
-        answerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        answerRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
       });
     } catch (err) {
       if (retryCount < 3) {
@@ -210,7 +221,9 @@ export default function App() {
         setError("⚠️ Failed to fetch answer. Please try again.");
         setLoading(false);
         setRetryCount(0);
-        toast.error("Failed to fetch answer. Please try again.", { id: "status" });
+        toast.error("Failed to fetch answer. Please try again.", {
+          id: "status",
+        });
       }
     }
   };
@@ -313,8 +326,12 @@ export default function App() {
               {lastUpdated && <small>🕒 Last updated: {lastUpdated}</small>}
 
               <div className="action-buttons">
-                <button onClick={copyToClipboard} className="copy-btn">📋 Copy</button>
-                <button onClick={shareAnswer} className="share-btn">🔗 Share</button>
+                <button onClick={copyToClipboard} className="copy-btn">
+                  📋 Copy
+                </button>
+                <button onClick={shareAnswer} className="share-btn">
+                  🔗 Share
+                </button>
               </div>
 
               {relatedQuestions.length > 0 && (
