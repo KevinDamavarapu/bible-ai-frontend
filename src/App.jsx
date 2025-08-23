@@ -13,7 +13,7 @@ const API_URL = `${API_BASE}/bible`;
 
 // FIXED regex: handles multi-word book names like "Song of Solomon", "1 Thessalonians"
 const verseRegex =
-  /\b((?:[1-3]?\s?[A-Z][a-z]+(?:\s+(?:of|the|and|[A-Z][a-z]+))*))\s+(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?\b/g;
+  /\b((?:[1-3]?\s?(?:[A-Z][a-z]+|of|the|and))+)\s+(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?\b/g;
 
 const boldTerms =
   /\b(God|Jesus|Christ|Holy\sSpirit|Spirit|faith|grace|love|hope|salvation|forgiveness|sin|mercy|righteousness)\b/gi;
@@ -27,7 +27,8 @@ const escapeHtml = (s) =>
     .replace(/'/g, "&#039;");
 
 const youVersionSearchUrl = (book, chapter, verse, endVerse) => {
-  const ref = `${book} ${chapter}:${verse}${endVerse ? "-" + endVerse : ""}`;
+  const cleanBook = book.replace(/\s+/g, " ").trim(); // normalize spaces
+  const ref = `${cleanBook} ${chapter}:${verse}${endVerse ? "-" + endVerse : ""}`;
   const q = encodeURIComponent(ref);
   return `https://www.bible.com/search/bible?query=${q}&version_id=111`;
 };
