@@ -1,3 +1,4 @@
+// App.jsx
 import React, { useRef, useState } from "react";
 import axios from "axios";
 import { Toaster, toast } from "react-hot-toast";
@@ -10,15 +11,12 @@ const API_URL = `${API_BASE}/bible`;
 
 // ---------- Formatting & NLP Helpers (layout/colors unchanged) ----------
 
-// Basic scripture reference detector (handles multi-word books & ranges)
 const verseRegex =
   /\b((?:[1-3]\s*)?(?:[A-Z][a-z]+(?:\s(?:of|the|and|[A-Z][a-z]+))*)?)\s+(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?\b/g;
 
-// Key terms to bold (non-invasive visual emphasis)
 const boldTerms =
   /\b(God|Jesus|Christ|Holy\sSpirit|Spirit|faith|grace|love|hope|salvation|forgiveness|sin|mercy|righteousness)\b/gi;
 
-// Escape to safe HTML
 const escapeHtml = (s) =>
   s
     .replace(/&/g, "&amp;")
@@ -27,69 +25,42 @@ const escapeHtml = (s) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 
-// Turn a reference match into a YouVersion (NIV = 111) search URL
 const youVersionSearchUrl = (book, chapter, verse, endVerse) => {
   const ref = `${book} ${chapter}:${verse}${endVerse ? "-" + endVerse : ""}`;
   const q = encodeURIComponent(ref);
-  // Reliable search endpoint (avoids per-book slug mapping)
   return `https://www.bible.com/search/bible?query=${q}&version_id=111`;
 };
 
-// Convert plain text to formatted HTML with clickable refs + emphasis
 const formatAnswerHtml = (text) => {
   if (!text) return "";
   const safe = escapeHtml(text.trim());
-
-  // Split into paragraphs on blank lines, keep line breaks inside paragraphs
   const paragraphs = safe.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
 
-  const html = paragraphs
+  return paragraphs
     .map((p) => {
-      // 1) Emphasize verse references (italics) AND make them links
       let chunk = p;
       chunk = chunk.replace(verseRegex, (m, book, ch, v, endV) => {
         const url = youVersionSearchUrl(book, ch, v, endV);
         const display = `${book} ${ch}:${v}${endV ? "-" + endV : ""}`;
         return `<a href="${url}" target="_blank" rel="noopener noreferrer"><em>${display}</em></a>`;
       });
-
-      // 2) Bold key doctrinal terms
       chunk = chunk.replace(boldTerms, "<strong>$&</strong>");
-
-      // 3) Convert single line breaks to <br/> inside a paragraph
       chunk = chunk.replace(/\n/g, "<br/>");
-
       return `<p>${chunk}</p>`;
     })
     .join("");
-
-  return html;
 };
 
-// Mini-NLP topic extraction
 const extractTopic = (q) => {
   if (!q) return "this topic";
-
-  // Normalize
   let s = q.trim();
-
-  // Prefer phrase after "about/on/of/regarding"
   const afterPreposition = s.match(
     /\b(?:about|on|of|regarding|concerning)\s+(.+)$/i
   );
-  if (afterPreposition && afterPreposition[1]) {
-    s = afterPreposition[1];
-  }
-
-  // If quoted phrase exists, use it
+  if (afterPreposition?.[1]) s = afterPreposition[1];
   const quoted = s.match(/["“”'‘’](.+?)["“”'‘’]/);
-  if (quoted && quoted[1]) {
-    s = quoted[1];
-  }
-
-  // Remove punctuation (keep spaces/hyphens)
+  if (quoted?.[1]) s = quoted[1];
   s = s.replace(/[^\w\s-]/g, " ");
-
   const stop = new Set([
     "what",
     "who",
@@ -141,40 +112,19 @@ const extractTopic = (q) => {
     "story",
     "parable",
   ]);
-
-  // Tokenize
-  const tokens = s
-    .split(/\s+/)
-    .map((w) => w.trim())
-    .filter(Boolean);
-
-  // Keep meaningful tokens
+  const tokens = s.split(/\s+/).map((w) => w.trim()).filter(Boolean);
   const kept = tokens.filter((w) => {
     const lw = w.toLowerCase();
     if (stop.has(lw)) return false;
     if (lw.length <= 2) return false;
-    // prune pure numbers unless likely a chapter/verse
     if (/^\d+$/.test(lw)) return false;
     return true;
   });
-
-  // Prefer the longest contiguous chunk from the original string that includes kept tokens
   let topic = kept.join(" ").trim();
-
-  // Fallbacks if we filtered too much
-  if (!topic) {
-    // Try capturing a noun-ish tail
-    const tail = q.split(/\s+/).slice(-6).join(" ");
-    topic = tail || q;
-  }
-
-  // Light tidy
-  topic = topic.replace(/\s+/g, " ").trim();
-
-  return topic || "this topic";
+  if (!topic) topic = q.split(/\s+/).slice(-6).join(" ") || q;
+  return topic.replace(/\s+/g, " ").trim() || "this topic";
 };
 
-// Build three related follow-ups from topic
 const buildRelated = (topic) => [
   `What key verses about ${topic} should I read next?`,
   `How does the Bible apply ${topic} to daily life?`,
@@ -210,13 +160,11 @@ export default function App() {
 
   const fetchAnswer = async (customQuery = query) => {
     if (!customQuery.trim() || loading) return;
-
     setLoading(true);
     setAnswer("");
     setError("");
     setLastUpdated("");
     setRelatedQuestions([]);
-
     toast.loading("Thinking…", { id: "status" });
 
     try {
@@ -224,7 +172,6 @@ export default function App() {
         params: { query: customQuery },
         timeout: 20000,
       });
-
       if (res.data?.error) throw new Error(res.data.error);
 
       const text = res.data?.answer || "No answer returned.";
@@ -233,24 +180,23 @@ export default function App() {
       setRetryCount(0);
       setLoading(false);
 
-      // Update history (keep last 5 unique)
+      // history
       setHistory((prev) => {
         const newHistory = [customQuery, ...prev.filter((q) => q !== customQuery)];
         return newHistory.slice(0, 5);
       });
 
-      // Generate related questions using mini-NLP topic
-      const topic = extractTopic(customQuery);
-      setRelatedQuestions(buildRelated(topic));
+      // related questions: prefer backend, fallback to NLP
+      if (Array.isArray(res.data.related_questions) && res.data.related_questions.length > 0) {
+        setRelatedQuestions(res.data.related_questions);
+      } else {
+        const topic = extractTopic(customQuery);
+        setRelatedQuestions(buildRelated(topic));
+      }
 
       toast.success("Answer ready", { id: "status" });
-
-      // Smooth scroll to the answer once it's rendered
       requestAnimationFrame(() => {
-        answerRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
+        answerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     } catch (err) {
       if (retryCount < 3) {
@@ -262,9 +208,7 @@ export default function App() {
         setError("⚠️ Failed to fetch answer. Please try again.");
         setLoading(false);
         setRetryCount(0);
-        toast.error("Failed to fetch answer. Please try again.", {
-          id: "status",
-        });
+        toast.error("Failed to fetch answer. Please try again.", { id: "status" });
       }
     }
   };
@@ -295,9 +239,7 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Single toast host (center) */}
       <Toaster position="top-center" />
-
       <h1 className="title">📖 Bible AI</h1>
       <p className="subtitle">Ask anything about the Bible</p>
 
@@ -362,25 +304,17 @@ export default function App() {
           {answer && (
             <>
               <strong>Answer:</strong>
-
-              {/* Formatted: paragraphs + clickable NIV links + bold terms */}
               <div
                 className="formatted-answer"
                 dangerouslySetInnerHTML={{ __html: formatAnswerHtml(answer) }}
               />
-
               {lastUpdated && <small>🕒 Last updated: {lastUpdated}</small>}
 
               <div className="action-buttons">
-                <button onClick={copyToClipboard} className="copy-btn">
-                  📋 Copy
-                </button>
-                <button onClick={shareAnswer} className="share-btn">
-                  🔗 Share
-                </button>
+                <button onClick={copyToClipboard} className="copy-btn">📋 Copy</button>
+                <button onClick={shareAnswer} className="share-btn">🔗 Share</button>
               </div>
 
-              {/* Related (uses existing blue pill buttons) */}
               {relatedQuestions.length > 0 && (
                 <div className="suggestions" style={{ marginTop: "0.75rem" }}>
                   <h3>Related questions:</h3>
@@ -403,7 +337,6 @@ export default function App() {
               )}
             </>
           )}
-
           {error && <div className="error-msg">{error}</div>}
         </div>
       )}
