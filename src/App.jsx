@@ -1,19 +1,20 @@
-// App.jsx
 import React, { useRef, useState } from "react";
 import axios from "axios";
 import { Toaster, toast } from "react-hot-toast";
 import "./App.css";
 
-// Backend URL (Vercel/Vite .env) with Render fallback
+// Backend URL with Render fallback
 const API_BASE =
   import.meta.env.VITE_API_URL || "https://bible-ai-wmlk.onrender.com";
 const API_URL = `${API_BASE}/bible`;
 
-// ---------- Formatting & NLP Helpers (layout/colors unchanged) ----------
+// ========================
+// Formatting & NLP Helpers
+// ========================
 
-// FIXED regex: handles multi-word book names like "Song of Solomon", "1 Thessalonians"
+// ✅ FIXED regex: handles multi-word book names like "Song of Solomon"
 const verseRegex =
-  /\b((?:[1-3]?\s?(?:[A-Z][a-z]+|of|the|and))+)\s+(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?\b/g;
+  /\b((?:[1-3]?\s?(?:[A-Z][a-z]+)(?:\s(?:of|the|and)\s[A-Z][a-z]+)*))\s+(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?\b/g;
 
 const boldTerms =
   /\b(God|Jesus|Christ|Holy\sSpirit|Spirit|faith|grace|love|hope|salvation|forgiveness|sin|mercy|righteousness)\b/gi;
@@ -27,8 +28,10 @@ const escapeHtml = (s) =>
     .replace(/'/g, "&#039;");
 
 const youVersionSearchUrl = (book, chapter, verse, endVerse) => {
-  const cleanBook = book.replace(/\s+/g, " ").trim(); // normalize spaces
-  const ref = `${cleanBook} ${chapter}:${verse}${endVerse ? "-" + endVerse : ""}`;
+  const cleanBook = book.replace(/\s+/g, " ").trim();
+  const ref = `${cleanBook} ${chapter}:${verse}${
+    endVerse ? "-" + endVerse : ""
+  }`;
   const q = encodeURIComponent(ref);
   return `https://www.bible.com/search/bible?query=${q}&version_id=111`;
 };
@@ -36,7 +39,10 @@ const youVersionSearchUrl = (book, chapter, verse, endVerse) => {
 const formatAnswerHtml = (text) => {
   if (!text) return "";
   const safe = escapeHtml(text.trim());
-  const paragraphs = safe.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const paragraphs = safe
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
 
   return paragraphs
     .map((p) => {
@@ -53,35 +59,15 @@ const formatAnswerHtml = (text) => {
     .join("");
 };
 
+// Extracts a simple topic keyword
 const extractTopic = (q) => {
-  if (!q) return "this topic";
-  let s = q.trim();
-  const afterPreposition = s.match(
-    /\b(?:about|on|of|regarding|concerning)\s+(.+)$/i
-  );
-  if (afterPreposition?.[1]) s = afterPreposition[1];
-  const quoted = s.match(/["“”'‘’](.+?)["“”'‘’]/);
-  if (quoted?.[1]) s = quoted[1];
-  s = s.replace(/[^\w\s-]/g, " ");
-  const stop = new Set([
-    "what","who","whom","whose","when","where","why","how",
-    "is","are","am","was","were","be","being","been","the",
-    "a","an","of","to","in","and","or","for","with","from",
-    "by","about","on","as","that","this","these","those",
-    "please","explain","tell","me","does","do","did","can",
-    "you","give","summarize","explanation","story","parable",
-  ]);
-  const tokens = s.split(/\s+/).map((w) => w.trim()).filter(Boolean);
-  const kept = tokens.filter((w) => {
-    const lw = w.toLowerCase();
-    if (stop.has(lw)) return false;
-    if (lw.length <= 2) return false;
-    if (/^\d+$/.test(lw)) return false;
-    return true;
-  });
-  let topic = kept.join(" ").trim();
-  if (!topic) topic = q.split(/\s+/).slice(-6).join(" ") || q;
-  return topic.replace(/\s+/g, " ").trim() || "this topic";
+  const words = q
+    .toLowerCase()
+    .replace(/[^\w\s]/g, "")
+    .split(" ")
+    .filter((w) => w.length > 3);
+  if (!words.length) return "Bible";
+  return words[0];
 };
 
 const buildRelated = (topic) => [
@@ -90,8 +76,9 @@ const buildRelated = (topic) => [
   `Can you summarize ${topic} in one sentence?`,
 ];
 
-// -----------------------------------------------------------------------
-
+// ========================
+// Main Component
+// ========================
 export default function App() {
   const [query, setQuery] = useState("");
   const [answer, setAnswer] = useState("");
@@ -117,58 +104,54 @@ export default function App() {
     "Explain the Ten Commandments",
   ];
 
-  const fetchAnswer = async (customQuery = query) => {
-    if (!customQuery.trim() || loading) return;
+  // ========================
+  // Fetch answer
+  // ========================
+  const fetchAnswer = async (customQuery) => {
+    const q = customQuery || query;
+    if (!q.trim()) return;
+
     setLoading(true);
-    setAnswer("");
     setError("");
-    setLastUpdated("");
+    setAnswer("");
     setRelatedQuestions([]);
-    toast.loading("Thinking…", { id: "status" });
 
     try {
-      const res = await axios.post(API_URL, null, {
-        params: { query: customQuery },
-        timeout: 20000,
-      });
-      if (res.data?.error) throw new Error(res.data.error);
+      const res = await axios.post(API_URL, { query: q }, { timeout: 20000 });
 
-      const text = res.data?.answer || "No answer returned.";
-      setAnswer(text);
-      setLastUpdated(new Date().toLocaleTimeString());
-      setRetryCount(0);
-      setLoading(false);
+      if (res.data && res.data.answer) {
+        const formatted = formatAnswerHtml(res.data.answer);
+        setAnswer(formatted);
 
-      // history
-      setHistory((prev) => {
-        const newHistory = [customQuery, ...prev.filter((q) => q !== customQuery)];
-        return newHistory.slice(0, 5);
-      });
+        const newEntry = { q, a: formatted };
+        setHistory((prev) => [newEntry, ...prev]);
 
-      // related questions: prefer backend, fallback to NLP
-      if (Array.isArray(res.data.related_questions) && res.data.related_questions.length > 0) {
-        setRelatedQuestions(res.data.related_questions);
-      } else {
-        const topic = extractTopic(customQuery);
+        const topic = extractTopic(q);
         setRelatedQuestions(buildRelated(topic));
-      }
 
-      toast.success("Answer ready", { id: "status" });
-      requestAnimationFrame(() => {
-        answerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    } catch (err) {
-      if (retryCount < 3) {
-        const next = retryCount + 1;
-        setRetryCount(next);
-        toast.loading(`Waking backend… retry ${next}/3`, { id: "status" });
-        setTimeout(() => fetchAnswer(customQuery), 3000);
-      } else {
-        setError("⚠️ Failed to fetch answer. Please try again.");
-        setLoading(false);
+        setLastUpdated(new Date().toLocaleString());
         setRetryCount(0);
-        toast.error("Failed to fetch answer. Please try again.", { id: "status" });
+
+        setTimeout(() => {
+          if (answerRef.current) {
+            answerRef.current.scrollIntoView({ behavior: "smooth" });
+          }
+        }, 100);
+      } else {
+        setError("No answer returned. Please try again.");
       }
+    } catch (err) {
+      console.error(err);
+      if (retryCount < 3) {
+        setRetryCount((c) => c + 1);
+        toast("Retrying...", { icon: "⏳" });
+        fetchAnswer(q);
+      } else {
+        setError("Failed to fetch answer. Please try again later.");
+        toast.error("Server unavailable. Try again later.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -178,125 +161,113 @@ export default function App() {
   };
 
   const copyToClipboard = () => {
-    if (answer) {
-      navigator.clipboard.writeText(answer);
-      toast.success("Copied to clipboard");
-    }
+    if (!answer) return;
+    const plain = answer.replace(/<[^>]+>/g, "");
+    navigator.clipboard.writeText(plain);
+    toast.success("Copied!");
   };
 
-  const shareAnswer = async () => {
+  const shareAnswer = () => {
+    if (!answer) return;
     if (navigator.share) {
-      try {
-        await navigator.share({ title: "Bible AI", text: answer });
-      } catch {
-        toast.error("Sharing cancelled");
-      }
+      navigator
+        .share({
+          title: "Bible AI Answer",
+          text: answer.replace(/<[^>]+>/g, ""),
+        })
+        .catch(() => {});
     } else {
-      copyToClipboard();
+      toast("Sharing not supported", { icon: "⚠️" });
     }
   };
 
+  // ========================
+  // Render
+  // ========================
   return (
     <div className="app-container">
       <Toaster position="top-center" />
       <h1 className="title">📖 Bible AI</h1>
       <p className="subtitle">Ask anything about the Bible</p>
 
-      <form className="input-section" onSubmit={handleSubmit}>
+      {/* Input Form */}
+      <form onSubmit={handleSubmit} className="query-form">
         <input
           type="text"
-          placeholder="Type your question here..."
+          placeholder="Type your question..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="query-input"
-          disabled={loading}
-          aria-busy={loading}
         />
-        <button type="submit" disabled={loading} className="ask-button">
-          {loading ? "Thinking…" : "Ask"}
+        <button type="submit" disabled={loading} className="submit-button">
+          {loading ? "Thinking..." : "Ask"}
         </button>
       </form>
 
+      {/* Suggestions */}
       <div className="suggestions">
-        <h3>Try one of these:</h3>
+        <p>Try:</p>
         <div className="suggestion-buttons">
-          {suggestions.map((s, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                setQuery(s);
-                fetchAnswer(s);
-              }}
-              className="suggestion-btn"
-              disabled={loading}
-            >
+          {suggestions.map((s, idx) => (
+            <button key={idx} onClick={() => fetchAnswer(s)} className="s-btn">
               {s}
             </button>
           ))}
         </div>
       </div>
 
-      {history.length > 0 && (
-        <div className="history-box">
-          <h3>Recent Questions:</h3>
-          <ul>
-            {history.map((h, i) => (
-              <li key={i}>
-                <button
-                  className="history-btn"
-                  onClick={() => {
-                    setQuery(h);
-                    fetchAnswer(h);
-                  }}
-                  disabled={loading}
-                >
-                  {h}
-                </button>
-              </li>
-            ))}
-          </ul>
+      {/* Error */}
+      {error && <p className="error">{error}</p>}
+
+      {/* Answer */}
+      {answer && (
+        <div className="answer-container" ref={answerRef}>
+          <h2 className="answer-title">Answer</h2>
+          <div
+            className="answer-box"
+            dangerouslySetInnerHTML={{ __html: answer }}
+          />
+          <div className="answer-actions">
+            <button onClick={copyToClipboard}>📋 Copy</button>
+            <button onClick={shareAnswer}>🔗 Share</button>
+          </div>
+          {lastUpdated && (
+            <p className="timestamp">Updated: {lastUpdated}</p>
+          )}
         </div>
       )}
 
-      {(answer || error) && (
-        <div ref={answerRef} className="answer-box">
-          {answer && (
-            <>
-              <strong>Answer:</strong>
+      {/* Related */}
+      {relatedQuestions.length > 0 && (
+        <div className="related-container">
+          <h3>Related Questions</h3>
+          <div className="related-buttons">
+            {relatedQuestions.map((r, idx) => (
+              <button
+                key={idx}
+                onClick={() => fetchAnswer(r)}
+                className="related-btn"
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* History */}
+      {history.length > 0 && (
+        <div className="history-container">
+          <h3>Previous Questions</h3>
+          {history.map((item, idx) => (
+            <div key={idx} className="history-entry">
+              <p className="history-q">Q: {item.q}</p>
               <div
-                className="formatted-answer"
-                dangerouslySetInnerHTML={{ __html: formatAnswerHtml(answer) }}
+                className="history-a"
+                dangerouslySetInnerHTML={{ __html: item.a }}
               />
-              {lastUpdated && <small>🕒 Last updated: {lastUpdated}</small>}
-
-              <div className="action-buttons">
-                <button onClick={copyToClipboard} className="copy-btn">📋 Copy</button>
-                <button onClick={shareAnswer} className="share-btn">🔗 Share</button>
-              </div>
-
-              {relatedQuestions.length > 0 && (
-                <div className="suggestions" style={{ marginTop: "0.75rem" }}>
-                  <h3>Related questions:</h3>
-                  <div className="suggestion-buttons">
-                    {relatedQuestions.map((rq, idx) => (
-                      <button
-                        key={idx}
-                        className="suggestion-btn"
-                        disabled={loading}
-                        onClick={() => {
-                          setQuery(rq);
-                          fetchAnswer(rq);
-                        }}
-                      >
-                        {rq}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-          {error && <div className="error-msg">{error}</div>}
+            </div>
+          ))}
         </div>
       )}
     </div>
