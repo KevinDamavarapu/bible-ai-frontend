@@ -13,7 +13,7 @@ const API_URL = `${API_BASE}/bible`;
 
 // ✅ FIXED regex: matches multi-word books like "Song of Solomon", "1 Samuel", "2 Corinthians"
 const verseRegex =
-  /\b((?:[1-3]\s*)?[A-Z][a-z]+(?:\s(?:of|the|and|[A-Z][a-z]+))*)(?:\s(?:[A-Z][a-z]+))*)\s+(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?\b/g;
+  /\b((?:[1-3]\s*)?[A-Z][a-z]+(?:\s(?:of|the|and|[A-Z][a-z]+))*)\s+(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?\b/g;
 
 const boldTerms =
   /\b(God|Jesus|Christ|Holy\sSpirit|Spirit|faith|grace|love|hope|salvation|forgiveness|sin|mercy|righteousness)\b/gi;
