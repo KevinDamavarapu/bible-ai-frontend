@@ -159,3 +159,23 @@ button:disabled {
   color: #2563eb; /* Darker blue on hover */
   text-decoration: underline;
 }
+
+/* 📦 Bible Verse Display Block */
+.bible-ref-block {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: #f9fafb; /* Light neutral background */
+  border-left: 4px solid #3b82f6; /* Blue accent bar */
+  border-radius: 6px;
+  font-size: 0.95rem;
+  color: #111827; /* Dark gray text */
+  line-height: 1.5;
+}
+
+.bible-ref-block strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+  color: #1f2937; /* Slightly darker heading */
+}
+

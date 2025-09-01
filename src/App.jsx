@@ -69,6 +69,7 @@ const fetchVerseFromBackend = async (book, chapter, verse, endVerse) => {
   return null; // fallback if backend not ready
 };
 
+// ✨ Clean Bible reference renderer
 const formatAnswerHtml = (text) => {
   if (!text) return "";
   const safe = escapeHtml(text.trim());
@@ -81,7 +82,7 @@ const formatAnswerHtml = (text) => {
     .map((p) => {
       let chunk = p;
 
-      // 🔧 Replace Bible references
+      // 🔧 Replace Bible references → move them to end of sentence
       chunk = chunk.replace(verseRegex, (m, book, ch, v, endV) => {
         const display = `${book} ${ch}:${v}${endV ? "-" + endV : ""}`;
 
@@ -95,19 +96,22 @@ const formatAnswerHtml = (text) => {
           }
         });
 
-        // Initial clickable link → replaced later if backend returns verse
         const url = youVersionSearchUrl(book, ch, v, endV);
-        return `<a 
+
+        // Instead of embedding inline, wrap at the end as (Ref → Link)
+        return ` <span class="bible-ref-block">(See <a 
           href="${url}" 
           target="_blank" 
           rel="noopener noreferrer" 
           class="bible-ref" 
           data-ref="${display.replace(/\s+/g, "_")}"
-        ><em>${display}</em></a>`;
+        ><em>${display}</em></a>)</span>`;
       });
 
+      // Keep bold words and line breaks
       chunk = chunk.replace(boldTerms, "<strong>$&</strong>");
       chunk = chunk.replace(/\n/g, "<br/>");
+
       return `<p>${chunk}</p>`;
     })
     .join("");
