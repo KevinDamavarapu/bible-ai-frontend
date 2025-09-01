@@ -9,6 +9,24 @@ const API_BASE =
   import.meta.env.VITE_API_URL || "https://bible-ai-wmlk.onrender.com";
 const API_URL = `${API_BASE}/bible`;
 
+// ✅ Canonical list of books (multi-word support)
+const BIBLE_BOOKS = [
+  "Genesis","Exodus","Leviticus","Numbers","Deuteronomy",
+  "Joshua","Judges","Ruth",
+  "1 Samuel","2 Samuel","1 Kings","2 Kings",
+  "1 Chronicles","2 Chronicles","Ezra","Nehemiah","Esther",
+  "Job","Psalms","Proverbs","Ecclesiastes","Song of Solomon",
+  "Isaiah","Jeremiah","Lamentations","Ezekiel","Daniel",
+  "Hosea","Joel","Amos","Obadiah","Jonah","Micah","Nahum",
+  "Habakkuk","Zephaniah","Haggai","Zechariah","Malachi",
+  "Matthew","Mark","Luke","John","Acts","Romans",
+  "1 Corinthians","2 Corinthians","Galatians","Ephesians",
+  "Philippians","Colossians","1 Thessalonians","2 Thessalonians",
+  "1 Timothy","2 Timothy","Titus","Philemon","Hebrews",
+  "James","1 Peter","2 Peter","1 John","2 John","3 John",
+  "Jude","Revelation"
+];
+
 // ---------- Formatting & NLP Helpers (layout/colors unchanged) ----------
 
 // ✅ FIXED regex: matches multi-word books like "Song of Solomon", "1 Samuel", "2 Corinthians"
@@ -35,6 +53,22 @@ const youVersionSearchUrl = (book, chapter, verse, endVerse) => {
   return `https://www.bible.com/search/bible?query=${q}&version_id=111`;
 };
 
+// ✅ Backend Bible verse fetcher
+const fetchVerseFromBackend = async (book, chapter, verse, endVerse) => {
+  try {
+    const res = await axios.get(`${API_BASE}/verse`, {
+      params: { book, chapter, verse, endVerse },
+      timeout: 8000,
+    });
+    if (res.data?.text) {
+      return res.data.text;
+    }
+  } catch (err) {
+    console.error("Verse fetch failed:", err);
+  }
+  return null; // fallback if backend not ready
+};
+
 const formatAnswerHtml = (text) => {
   if (!text) return "";
   const safe = escapeHtml(text.trim());
@@ -46,11 +80,32 @@ const formatAnswerHtml = (text) => {
   return paragraphs
     .map((p) => {
       let chunk = p;
+
+      // 🔧 Replace Bible references
       chunk = chunk.replace(verseRegex, (m, book, ch, v, endV) => {
-        const url = youVersionSearchUrl(book, ch, v, endV);
         const display = `${book} ${ch}:${v}${endV ? "-" + endV : ""}`;
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer"><em>${display}</em></a>`;
+
+        // Try backend fetch first
+        fetchVerseFromBackend(book, ch, v, endV).then((verseText) => {
+          if (verseText) {
+            const el = document.querySelector(
+              `[data-ref='${display.replace(/\s+/g, "_")}']`
+            );
+            if (el) el.innerHTML = `<em>${display}</em>: ${verseText}`;
+          }
+        });
+
+        // Initial clickable link → replaced later if backend returns verse
+        const url = youVersionSearchUrl(book, ch, v, endV);
+        return `<a 
+          href="${url}" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          class="bible-ref" 
+          data-ref="${display.replace(/\s+/g, "_")}"
+        ><em>${display}</em></a>`;
       });
+
       chunk = chunk.replace(boldTerms, "<strong>$&</strong>");
       chunk = chunk.replace(/\n/g, "<br/>");
       return `<p>${chunk}</p>`;
@@ -69,55 +124,11 @@ const extractTopic = (q) => {
   if (quoted?.[1]) s = quoted[1];
   s = s.replace(/[^\w\s-]/g, " ");
   const stop = new Set([
-    "what",
-    "who",
-    "whom",
-    "whose",
-    "when",
-    "where",
-    "why",
-    "how",
-    "is",
-    "are",
-    "am",
-    "was",
-    "were",
-    "be",
-    "being",
-    "been",
-    "the",
-    "a",
-    "an",
-    "of",
-    "to",
-    "in",
-    "and",
-    "or",
-    "for",
-    "with",
-    "from",
-    "by",
-    "about",
-    "on",
-    "as",
-    "that",
-    "this",
-    "these",
-    "those",
-    "please",
-    "explain",
-    "tell",
-    "me",
-    "does",
-    "do",
-    "did",
-    "can",
-    "you",
-    "give",
-    "summarize",
-    "explanation",
-    "story",
-    "parable",
+    "what","who","whom","whose","when","where","why","how","is","are","am",
+    "was","were","be","being","been","the","a","an","of","to","in","and",
+    "or","for","with","from","by","about","on","as","that","this","these",
+    "those","please","explain","tell","me","does","do","did","can","you",
+    "give","summarize","explanation","story","parable",
   ]);
   const tokens = s.split(/\s+/).map((w) => w.trim()).filter(Boolean);
   const kept = tokens.filter((w) => {
