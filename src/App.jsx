@@ -27,9 +27,9 @@ const BIBLE_BOOKS = [
   "Jude","Revelation"
 ];
 
-// ---------- Formatting & NLP Helpers (layout/colors unchanged) ----------
+// ---------- Formatting & NLP Helpers ----------
 
-// ✅ FIXED regex: matches multi-word books like "Song of Solomon", "1 Samuel", "2 Corinthians"
+// ✅ FIXED regex: matches multi-word books like "Song of Solomon", "1 Samuel"
 const verseRegex =
   /\b((?:[1-3]\s*)?[A-Z][a-z]+(?:\s(?:of|the|and|[A-Z][a-z]+))*)\s+(\d{1,3}):(\d{1,3})(?:[-–](\d{1,3}))?\b/g;
 
@@ -80,39 +80,30 @@ const formatAnswerHtml = (text) => {
 
   return paragraphs
     .map((p) => {
-      let chunk = p;
-
-      // 🔧 Replace Bible references → move them to end of sentence
-      chunk = chunk.replace(verseRegex, (m, book, ch, v, endV) => {
+      let refs = [];
+      let chunk = p.replace(verseRegex, (m, book, ch, v, endV) => {
         const display = `${book} ${ch}:${v}${endV ? "-" + endV : ""}`;
-
-        // Try backend fetch first
-        fetchVerseFromBackend(book, ch, v, endV).then((verseText) => {
-          if (verseText) {
-            const el = document.querySelector(
-              `[data-ref='${display.replace(/\s+/g, "_")}']`
-            );
-            if (el) el.innerHTML = `<em>${display}</em>: ${verseText}`;
-          }
-        });
-
         const url = youVersionSearchUrl(book, ch, v, endV);
 
-        // Instead of embedding inline, wrap at the end as (Ref → Link)
-        return ` <span class="bible-ref-block">(See <a 
-          href="${url}" 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          class="bible-ref" 
-          data-ref="${display.replace(/\s+/g, "_")}"
-        ><em>${display}</em></a>)</span>`;
+        refs.push(
+          `<span class="bible-ref-block">(See <a 
+            href="${url}" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            class="bible-ref" 
+            data-ref="${display.replace(/\s+/g, "_")}"
+          >${display}</a>)</span>`
+        );
+
+        // Keep inline ref clean
+        return `<em>${display}</em>`;
       });
 
       // Keep bold words and line breaks
       chunk = chunk.replace(boldTerms, "<strong>$&</strong>");
       chunk = chunk.replace(/\n/g, "<br/>");
 
-      return `<p>${chunk}</p>`;
+      return `<p>${chunk} ${refs.join(" ")}</p>`;
     })
     .join("");
 };
